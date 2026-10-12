@@ -1,0 +1,17 @@
+# Dependencias
+node_modules
+dashboard/node_modules
+dashboard/dist
+
+# Variables de entorno con secretos
+.env
+.env.*
+!.env.example
+
+# Sistema / Editores
+.DS_Store
+Thumbs.db
+__pycache__
+*.pyc
+.idea
+.vscode
