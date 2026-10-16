@@ -5,23 +5,24 @@ import time
 from machine import Pin, time_pulse_us
 
 # ============================================================
-# CONFIGURACIÓN DE RED Y SUPABASE
+# ESTACIÓN DE AUTOCOBRO IOT - FIRMWARE ESP32 (MicroPython)
 # ------------------------------------------------------------
-# Para el simulador Wokwi usar la red virtual "Wokwi-GUEST".
-# Reemplaza SUPABASE_URL y SUPABASE_KEY con las credenciales
-# reales de tu proyecto (se dejaron como placeholders por
-# ciberseguridad) y el ESTACION_ID con el id de tu estación.
+# Universidad Católica Boliviana "San Pablo" - IoT
+# Transmite eventos de sensores hacia la tabla 'sensor_readings'
+# de Supabase para alimentar el flujo de Autocobro y Dashboard.
 # ============================================================
+
 WIFI_SSID = "Wokwi-GUEST"
 WIFI_PASS = ""
+# Reemplazar con la URL y API Key de tu proyecto en Supabase:
 SUPABASE_URL = "https://TU_PROYECTO.supabase.co"
 SUPABASE_KEY = "TU_ANON_KEY_PUBLIC"
-ESTACION_ID = 1  # id de 'CAJA_IOT_01' en la tabla estaciones_autocobro
+DEVICE_ID = "CAJA_IOT_01"
 
-# Configuración de pines GPIO del ESP32
+# Mapeo de Pines GPIO del ESP32
 LED_ESTADO = Pin(13, Pin.OUT)   # LED de estado Wi-Fi (GPIO 13)
-BUZZER     = Pin(15, Pin.OUT)   # Zumbador piezoeléctrico
-TRIG_PIN   = Pin(17, Pin.OUT)   # HC-SR04 Trigger
+BUZZER     = Pin(15, Pin.OUT)   # Zumbador piezoeléctrico de confirmación (GPIO 15)
+TRIG_PIN   = Pin(17, Pin.OUT)   # HC-SR04 Trigger (Proximidad/Presencia)
 ECHO_PIN   = Pin(2, Pin.IN)     # HC-SR04 Echo
 
 
@@ -57,7 +58,7 @@ def conectar_wifi():
 
 
 def emitir_beep(duracion=0.1):
-    """Genera una alerta sonora corta al procesar una lectura."""
+    """Genera una alerta sonora corta al registrar un evento en la estación."""
     try:
         BUZZER.value(1)
         time.sleep(duracion)
@@ -67,7 +68,7 @@ def emitir_beep(duracion=0.1):
 
 
 def leer_distancia_ultrasonido():
-    """Lee el sensor HC-SR04; retorna un valor simulado si falla."""
+    """Lee el sensor HC-SR04 (presencia/retiro de artículos); valor por defecto si falla."""
     try:
         TRIG_PIN.value(0)
         time.sleep_us(2)
@@ -79,30 +80,39 @@ def leer_distancia_ultrasonido():
             return round((duracion / 2) / 29.1, 2)
     except Exception as e:
         print("[HC-SR04] Error de lectura:", e)
-    return 12.5  # Valor por defecto / simulado en cm
+    return 12.5  # Valor simulado en cm
 
 
-def enviar_telemetria_supabase(codigo, peso, distancia):
-    """Envía una lectura a la tabla 'lecturas_iot' vía REST API (HTTP POST)."""
-    url = "{}/rest/v1/lecturas_iot".format(SUPABASE_URL)
+def enviar_sensor_reading(sensor_type, numeric_value=0.0, rfid_uid=None, metadata=None):
+    """
+    Envía una lectura individual a la tabla 'sensor_readings' vía Supabase REST API (HTTP POST).
+    Tipos soportados:
+      - 'rc522'      : Detección de tag RFID de producto escaneado.
+      - 'hx711'      : Peso medido en gramos en la bandeja de pesaje anti-fraude.
+      - 'proximidad' : Detección de presencia o retiro de productos de la estación.
+    """
+    clean_url = SUPABASE_URL.rstrip("/").replace("/rest/v1", "")
+    url = "{}/rest/v1/sensor_readings".format(clean_url)
+
     headers = {
         "apikey": SUPABASE_KEY,
         "Authorization": "Bearer " + SUPABASE_KEY,
         "Content-Type": "application/json",
         "Prefer": "return=minimal",
     }
+
     payload = {
-        "estacion_id": ESTACION_ID,
-        "codigo_escaneado": codigo,
-        "peso_medido_g": peso,
-        "distancia_cm": distancia,
-        "estado_validacion": "CORRECTO" if peso > 0 else "ERROR_PESO",
+        "device_id": DEVICE_ID,
+        "sensor_type": sensor_type,
+        "numeric_value": float(numeric_value),
+        "rfid_uid": rfid_uid,
+        "metadata": metadata if metadata else {},
     }
 
     try:
         res = urequests.post(url, headers=headers, data=ujson.dumps(payload))
         if res.status_code in (200, 201, 204):
-            print("[Supabase] Registro enviado -> {} | {} g".format(codigo, peso))
+            print("[Supabase] Lectura enviada -> {} | val: {} | uid: {}".format(sensor_type, numeric_value, rfid_uid))
             emitir_beep()
         else:
             print("[Supabase] Error HTTP:", res.status_code, res.text)
@@ -121,7 +131,7 @@ codigos_demo = ["TAG_LECHE_1L", "TAG_PAN_500G", "TAG_GALLETAS", "TAG_JUGO_1L"]
 pesos_demo = [1025.0, 510.0, 210.0, 1060.0]
 indice = 0
 
-print("=== ESTACIÓN DE AUTOCOBRO IOT INICIADA ===")
+print("=== ESTACIÓN DE AUTOCOBRO IOT INICIADA (ESP32) ===")
 
 while True:
     try:
@@ -130,19 +140,26 @@ while True:
         if not wlan.isconnected():
             conectar_wifi()
 
-        # 2. Obtener lecturas de los sensores
-        distancia = leer_distancia_ultrasonido()
-        codigo_actual = codigos_demo[indice % len(codigos_demo)]
-        peso_actual = pesos_demo[indice % len(pesos_demo)]
-
-        # 3. Transmitir a la nube (Supabase)
         if wlan.isconnected():
-            enviar_telemetria_supabase(codigo_actual, peso_actual, distancia)
-        else:
-            print("[Sistema] Sin conexión: lectura no enviada.")
+            tag_actual = codigos_demo[indice % len(codigos_demo)]
+            peso_actual = pesos_demo[indice % len(pesos_demo)]
+            distancia_actual = leer_distancia_ultrasonido()
 
-        indice += 1
-        time.sleep(5)  # Envío cada 5 segundos
+            # Transmisión secuencial simulando la interacción del cliente:
+            # A) Evento RFID RC522: producto escaneado
+            enviar_sensor_reading("rc522", numeric_value=0.0, rfid_uid=tag_actual, metadata={"source": "RC522_SPI"})
+            time.sleep(1)
+
+            # B) Evento Balanza HX711: producto colocado en la balanza
+            enviar_sensor_reading("hx711", numeric_value=peso_actual, rfid_uid=None, metadata={"unit": "g"})
+            time.sleep(1)
+
+            # C) Evento Ultrasonido/Proximidad: cliente frente a la estación
+            enviar_sensor_reading("proximidad", numeric_value=distancia_actual, rfid_uid=None, metadata={"dist_cm": distancia_actual})
+
+            indice += 1
+
+        time.sleep(5)  # Intervalo de 5 segundos entre ciclos de demostración
 
     except Exception as err:
         print("[Sistema] Error en el ciclo principal:", err)

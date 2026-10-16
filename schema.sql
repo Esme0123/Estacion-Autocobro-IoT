@@ -1,255 +1,200 @@
 -- ============================================================================
---  ESTACIÓN DE AUTOCOBRO INTELIGENTE (SELF-CHECKOUT) - IoT
---  Base de Datos PostgreSQL / Supabase
---  Universidad Católica Boliviana "San Pablo" - Internet de las Cosas (IoT)
+-- ESTACIÓN DE AUTOCOBRO INTELIGENTE (SELF-CHECKOUT) - IoT
+-- Esquema PostgreSQL / Supabase
+-- Universidad Católica Boliviana "San Pablo" - Internet de las Cosas (IoT)
 -- ============================================================================
---  Contenido:
---   1. Extensiones y esquema
---   2. Tablas (7): perfiles, categorias, estaciones_autocobro, productos,
---      lecturas_iot, transacciones, detalle_transacciones
---   3. Índices y triggers
---   4. Row Level Security (RLS) y políticas
---   5. Publicación Realtime para el Dashboard
---   6. Datos iniciales de prueba (seed)
+-- Tablas:
+--   1. products          (Maestro de inventario con códigos de barra, RFID, pesos y stock)
+--   2. sensor_readings   (Telemetría IoT en tiempo real: RFID RC522, Báscula HX711, Proximidad)
+--   3. purchases         (Cabecera de transacciones completadas)
+--   4. purchase_items    (Detalle de productos vendidos y pesos medidos)
+--   5. profiles          (Perfiles de usuario: CLIENTE / SUPERVISOR / ADMIN)
 -- ============================================================================
 
--- ---------------------------------------------------------------------------
--- 1. EXTENSIONES Y ESQUEMA
--- ---------------------------------------------------------------------------
 create extension if not exists "pgcrypto";
 
 -- ---------------------------------------------------------------------------
--- 2. TABLAS
+-- 1. TABLA: products (Inventario de Productos con RFID)
 -- ---------------------------------------------------------------------------
-
--- 2.1 Perfiles / Usuarios (enlaza con auth.users de Supabase)
-create table if not exists public.perfiles (
-    id              uuid primary key references auth.users (id) on delete cascade,
-    nombre_completo text not null default 'Usuario',
-    rol             text not null default 'CLIENTE'
-                    check (rol in ('ADMIN', 'SUPERVISOR', 'CLIENTE')),
-    created_at      timestamptz not null default now()
-);
-
--- 2.2 Categorías de productos
-create table if not exists public.categorias (
-    id          bigserial primary key,
-    nombre      text not null unique,
-    descripcion text,
-    created_at  timestamptz not null default now()
-);
-
--- 2.3 Estaciones de autocobro (cajas IoT desplegadas)
-create table if not exists public.estaciones_autocobro (
-    id              bigserial primary key,
-    codigo_estacion text not null unique,
-    ubicacion       text,
-    estado          text not null default 'ACTIVA'
-                    check (estado in ('ACTIVA', 'INACTIVA', 'MANTENIMIENTO')),
-    created_at      timestamptz not null default now()
-);
-
--- 2.4 Productos (maestro de inventario etiquetado con RFID)
-create table if not exists public.productos (
-    id              bigserial primary key,
-    categoria_id    bigint references public.categorias (id) on delete set null,
-    codigo_tag      text not null unique,
-    nombre          text not null,
-    precio          numeric(10, 2) not null check (precio >= 0),
-    peso_esperado_g numeric(10, 2) not null check (peso_esperado_g >= 0),
-    stock           integer not null default 0 check (stock >= 0),
-    created_at      timestamptz not null default now()
-);
-
--- 2.5 Lecturas de telemetría enviadas por el nodo ESP32
-create table if not exists public.lecturas_iot (
+create table if not exists public.products (
     id                bigserial primary key,
-    estacion_id       bigint references public.estaciones_autocobro (id) on delete set null,
-    created_at        timestamptz not null default now(),
-    codigo_escaneado  text,
-    peso_medido_g     numeric(10, 2),
-    distancia_cm      numeric(10, 2),
-    estado_validacion text not null default 'PENDIENTE'
-                      check (estado_validacion in
-                             ('PENDIENTE', 'CORRECTO', 'ERROR_PESO', 'ERROR_LECTURA'))
+    name              text not null,
+    barcode           text unique,
+    rfid_uid          text unique,
+    price             numeric(10, 2) not null check (price >= 0),
+    expected_weight_g numeric(10, 2) not null check (expected_weight_g >= 0),
+    stock             integer not null default 20 check (stock >= 0),
+    active            boolean not null default true,
+    description       text,
+    image_url         text default '📦',
+    created_at        timestamptz not null default now()
 );
 
--- 2.6 Transacciones (cabecera de compra)
-create table if not exists public.transacciones (
-    id           bigserial primary key,
-    estacion_id  bigint references public.estaciones_autocobro (id) on delete set null,
-    usuario_id   uuid references public.perfiles (id) on delete set null,
-    monto_total  numeric(10, 2) not null check (monto_total >= 0),
-    metodo_pago  text not null default 'EFECTIVO'
-                 check (metodo_pago in ('EFECTIVO', 'QR', 'TARJETA')),
-    estado       text not null default 'COMPLETADO'
-                 check (estado in ('PENDIENTE', 'COMPLETADO', 'ANULADO')),
-    created_at   timestamptz not null default now()
-);
+-- Si la tabla ya existía sin algunas columnas, asegurar compatibilidad:
+alter table public.products add column if not exists rfid_uid text;
+alter table public.products add column if not exists stock integer default 20 check (stock >= 0);
+alter table public.products add column if not exists image_url text default '📦';
 
--- 2.7 Detalle de transacciones (líneas de venta)
-create table if not exists public.detalle_transacciones (
-    id             bigserial primary key,
-    transaccion_id bigint not null references public.transacciones (id) on delete cascade,
-    producto_id    bigint references public.productos (id) on delete set null,
-    cantidad       integer not null default 1 check (cantidad > 0),
-    precio_unitario numeric(10, 2) not null check (precio_unitario >= 0),
-    subtotal       numeric(10, 2) not null check (subtotal >= 0)
+-- ---------------------------------------------------------------------------
+-- 2. TABLA: sensor_readings (Telemetría de Sensores ESP32)
+-- ---------------------------------------------------------------------------
+create table if not exists public.sensor_readings (
+    id            bigserial primary key,
+    device_id     text not null default 'CAJA_IOT_01',
+    sensor_type   text not null, -- 'rc522', 'hx711', 'proximidad', 'magnetico'
+    numeric_value numeric(10, 2) default 0,
+    rfid_uid      text,
+    metadata      jsonb default '{}'::jsonb,
+    created_at    timestamptz not null default now()
 );
 
 -- ---------------------------------------------------------------------------
--- 3. ÍNDICES Y TRIGGERS
+-- 3. TABLA: purchases (Cabecera de Compras Autocobro)
 -- ---------------------------------------------------------------------------
-create index if not exists idx_productos_categoria   on public.productos (categoria_id);
-create index if not exists idx_lecturas_estacion     on public.lecturas_iot (estacion_id);
-create index if not exists idx_lecturas_created_at   on public.lecturas_iot (created_at desc);
-create index if not exists idx_transacciones_usuario on public.transacciones (usuario_id);
-create index if not exists idx_detalle_transaccion   on public.detalle_transacciones (transaccion_id);
+create table if not exists public.purchases (
+    id                bigserial primary key,
+    total             numeric(10, 2) not null check (total >= 0),
+    status            text not null default 'COMPLETED', -- 'COMPLETED', 'PENDING', 'CANCELLED'
+    payment_method    text default 'TARJETA', -- 'TARJETA', 'QR', 'EFECTIVO'
+    customer_id       text,
+    measured_weight_g numeric(10, 2) default 0,
+    created_at        timestamptz not null default now()
+);
 
--- Crea automáticamente un perfil cuando un usuario se registra en Supabase Auth
-create or replace function public.handle_new_user()
+-- Asegurar columnas si la tabla ya existía:
+alter table public.purchases add column if not exists payment_method text default 'TARJETA';
+alter table public.purchases add column if not exists measured_weight_g numeric(10, 2) default 0;
+
+-- ---------------------------------------------------------------------------
+-- 4. TABLA: purchase_items (Líneas de Venta)
+-- ---------------------------------------------------------------------------
+create table if not exists public.purchase_items (
+    id                bigserial primary key,
+    purchase_id       bigint references public.purchases (id) on delete cascade,
+    product_id        bigint references public.products (id) on delete set null,
+    quantity          integer not null default 1 check (quantity > 0),
+    unit_price        numeric(10, 2) not null check (unit_price >= 0),
+    subtotal          numeric(10, 2) not null check (subtotal >= 0),
+    measured_weight_g numeric(10, 2) default 0,
+    created_at        timestamptz not null default now()
+);
+
+-- ---------------------------------------------------------------------------
+-- 5. TABLA: profiles (Perfiles de Usuario)
+-- ---------------------------------------------------------------------------
+create table if not exists public.profiles (
+    id         uuid primary key references auth.users (id) on delete cascade,
+    full_name  text not null default 'Usuario',
+    role       text not null default 'CLIENTE' check (role in ('ADMIN', 'SUPERVISOR', 'CLIENTE')),
+    created_at timestamptz not null default now()
+);
+
+-- Trigger para crear perfil automáticamente al registrar usuario
+create or replace function public.handle_new_auth_user()
 returns trigger
 language plpgsql
 security definer set search_path = public
 as $$
 begin
-    insert into public.perfiles (id, nombre_completo, rol)
+    insert into public.profiles (id, full_name, role)
     values (
         new.id,
         coalesce(new.raw_user_meta_data ->> 'nombre_completo', new.email, 'Usuario'),
         coalesce(new.raw_user_meta_data ->> 'rol', 'CLIENTE')
     )
-    on conflict (id) do nothing;
+    on conflict (id) do update set
+        full_name = excluded.full_name,
+        role = excluded.role;
     return new;
 end;
 $$;
 
-drop trigger if exists on_auth_user_created on auth.users;
-create trigger on_auth_user_created
+drop trigger if exists on_auth_user_created_profiles on auth.users;
+create trigger on_auth_user_created_profiles
     after insert on auth.users
-    for each row execute function public.handle_new_user();
+    for each row execute function public.handle_new_auth_user();
 
 -- ---------------------------------------------------------------------------
--- 4. ROW LEVEL SECURITY (RLS)
+-- 6. POLÍTICAS DE ROW LEVEL SECURITY (RLS)
 -- ---------------------------------------------------------------------------
-alter table public.perfiles              enable row level security;
-alter table public.categorias            enable row level security;
-alter table public.estaciones_autocobro  enable row level security;
-alter table public.productos             enable row level security;
-alter table public.lecturas_iot          enable row level security;
-alter table public.transacciones         enable row level security;
-alter table public.detalle_transacciones enable row level security;
+alter table public.products        enable row level security;
+alter table public.sensor_readings enable row level security;
+alter table public.purchases       enable row level security;
+alter table public.purchase_items  enable row level security;
+alter table public.profiles        enable row level security;
 
--- 4.1 perfiles: cada usuario ve/edita su propio perfil; ADMIN ve todos
-drop policy if exists "perfiles_select_propio" on public.perfiles;
-create policy "perfiles_select_propio" on public.perfiles
-    for select using (auth.uid() = id or auth.jwt() ->> 'email' = 'admin@ucb.edu.bo');
+-- 6.1 products: lectura y escritura pública para demo / cajero / admin
+drop policy if exists "products_public_all" on public.products;
+create policy "products_public_all" on public.products
+    for all to anon, authenticated using (true) with check (true);
 
-drop policy if exists "perfiles_update_propio" on public.perfiles;
-create policy "perfiles_update_propio" on public.perfiles
-    for update using (auth.uid() = id);
+-- 6.2 sensor_readings: inserción y lectura libre para nodo IoT ESP32 y Dashboard
+drop policy if exists "sensor_readings_all" on public.sensor_readings;
+create policy "sensor_readings_all" on public.sensor_readings
+    for all to anon, authenticated using (true) with check (true);
 
-drop policy if exists "perfiles_insert_propio" on public.perfiles;
-create policy "perfiles_insert_propio" on public.perfiles
-    for insert with check (auth.uid() = id);
+-- 6.3 purchases y purchase_items: lectura y creación abierta para registrar compras
+drop policy if exists "purchases_all" on public.purchases;
+create policy "purchases_all" on public.purchases
+    for all to anon, authenticated using (true) with check (true);
 
--- 4.2 Catálogo: lectura pública (anon) y escritura para autenticados
-drop policy if exists "categorias_select_publico" on public.categorias;
-create policy "categorias_select_publico" on public.categorias
-    for select to anon, authenticated using (true);
+drop policy if exists "purchase_items_all" on public.purchase_items;
+create policy "purchase_items_all" on public.purchase_items
+    for all to anon, authenticated using (true) with check (true);
 
-drop policy if exists "categorias_admin" on public.categorias;
-create policy "categorias_admin" on public.categorias
-    for all to authenticated using (true) with check (true);
-
-drop policy if exists "estaciones_select_publico" on public.estaciones_autocobro;
-create policy "estaciones_select_publico" on public.estaciones_autocobro
-    for select to anon, authenticated using (true);
-
-drop policy if exists "estaciones_admin" on public.estaciones_autocobro;
-create policy "estaciones_admin" on public.estaciones_autocobro
-    for all to authenticated using (true) with check (true);
-
-drop policy if exists "productos_select_publico" on public.productos;
-create policy "productos_select_publico" on public.productos
-    for select to anon, authenticated using (true);
-
-drop policy if exists "productos_admin" on public.productos;
-create policy "productos_admin" on public.productos
-    for all to authenticated using (true) with check (true);
-
--- 4.3 lecturas_iot: el nodo ESP32 (anon) inserta; el dashboard lee
-drop policy if exists "lecturas_insert_iot" on public.lecturas_iot;
-create policy "lecturas_insert_iot" on public.lecturas_iot
-    for insert to anon, authenticated with check (true);
-
-drop policy if exists "lecturas_select_publico" on public.lecturas_iot;
-create policy "lecturas_select_publico" on public.lecturas_iot
-    for select to anon, authenticated using (true);
-
--- 4.4 transacciones: lectura/escritura para autenticados
-drop policy if exists "transacciones_authenticated" on public.transacciones;
-create policy "transacciones_authenticated" on public.transacciones
-    for all to authenticated using (true) with check (true);
-
--- 4.5 detalle_transacciones: lectura/escritura para autenticados
-drop policy if exists "detalle_authenticated" on public.detalle_transacciones;
-create policy "detalle_authenticated" on public.detalle_transacciones
-    for all to authenticated using (true) with check (true);
+-- 6.4 profiles
+drop policy if exists "profiles_all" on public.profiles;
+create policy "profiles_all" on public.profiles
+    for all to anon, authenticated using (true) with check (true);
 
 -- ---------------------------------------------------------------------------
--- 5. REALTIME (suscripciones en vivo del Dashboard)
+-- 7. PUBLICACIÓN REALTIME (Suscripción en vivo)
 -- ---------------------------------------------------------------------------
 do $$
 begin
+    -- sensor_readings
     if not exists (
         select 1 from pg_publication_tables
-        where pubname = 'supabase_realtime'
-          and schemaname = 'public'
-          and tablename = 'lecturas_iot'
+        where pubname = 'supabase_realtime' and schemaname = 'public' and tablename = 'sensor_readings'
     ) then
-        alter publication supabase_realtime add table public.lecturas_iot;
+        alter publication supabase_realtime add table public.sensor_readings;
+    end if;
+
+    -- products
+    if not exists (
+        select 1 from pg_publication_tables
+        where pubname = 'supabase_realtime' and schemaname = 'public' and tablename = 'products'
+    ) then
+        alter publication supabase_realtime add table public.products;
+    end if;
+
+    -- purchases
+    if not exists (
+        select 1 from pg_publication_tables
+        where pubname = 'supabase_realtime' and schemaname = 'public' and tablename = 'purchases'
+    ) then
+        alter publication supabase_realtime add table public.purchases;
     end if;
 end $$;
 
 -- ---------------------------------------------------------------------------
--- 6. DATOS INICIALES DE PRUEBA (SEED)
+-- 8. DATOS INICIALES DE PRUEBA (SEED)
 -- ---------------------------------------------------------------------------
+insert into public.products (id, name, barcode, rfid_uid, price, expected_weight_g, stock, active, description, image_url) values
+    (1, 'Leche Entera 1 Litro',       '7771234001', 'TAG_LECHE_1L',    7.50,  1025.00, 40, true, 'Leche pasteurizada en bolsa de 1000 ml', '🥛'),
+    (2, 'Pan de Molde 500g',          '7771234002', 'TAG_PAN_500G',   12.00,   510.00,  8, true, 'Pan blanco rebanado familiar (Stock Bajo)', '🍞'),
+    (3, 'Galletas de Chocolate 200g', '7771234003', 'TAG_GALLETAS',    5.50,   210.00, 60, true, 'Galletas rellenas con crema de cacao', '🍪'),
+    (4, 'Jugo de Naranja 1 Litro',    '7771234004', 'TAG_JUGO_1L',    10.00,  1060.00, 25, true, 'Jugo 100% natural sin pulpa', '🧃'),
+    (5, 'Café Tostado y Molido 250g', '7771234005', 'TAG_CAFE_250G',  28.00,   265.00,  5, true, 'Café arábica de altura yungueño (Crítico)', '☕'),
+    (6, 'Manzanas Rojas 1 kg',        '7771234006', 'TAG_MANZANAS_1KG',14.00, 1005.00, 32, true, 'Manzanas rojas frescas seleccionadas', '🍎')
+on conflict (id) do update set
+    name = excluded.name,
+    barcode = excluded.barcode,
+    rfid_uid = excluded.rfid_uid,
+    price = excluded.price,
+    expected_weight_g = excluded.expected_weight_g,
+    stock = excluded.stock,
+    active = excluded.active;
 
--- 6.1 Categorías
-insert into public.categorias (nombre, descripcion) values
-    ('Lácteos',   'Leches, yogures y derivados'),
-    ('Panadería', 'Panes, bollería y repostería'),
-    ('Snacks',    'Galletas, papas fritas y dulces'),
-    ('Bebidas',   'Gaseosas, jugos y aguas')
-on conflict (nombre) do nothing;
-
--- 6.2 Estación de autocobro
-insert into public.estaciones_autocobro (codigo_estacion, ubicacion, estado) values
-    ('CAJA_IOT_01', 'Sucursal Central - Pasillo 1', 'ACTIVA')
-on conflict (codigo_estacion) do nothing;
-
--- 6.3 Productos (codigo_tag = etiqueta RFID)
-insert into public.productos (categoria_id, codigo_tag, nombre, precio, peso_esperado_g, stock)
-select c.id, 'TAG_LECHE_1L', 'Leche Entera 1 Litro', 7.50, 1025.00, 40
-from public.categorias c where c.nombre = 'Lácteos'
-on conflict (codigo_tag) do nothing;
-
-insert into public.productos (categoria_id, codigo_tag, nombre, precio, peso_esperado_g, stock)
-select c.id, 'TAG_PAN_500G', 'Pan de Molde 500g', 12.00, 510.00, 25
-from public.categorias c where c.nombre = 'Panadería'
-on conflict (codigo_tag) do nothing;
-
-insert into public.productos (categoria_id, codigo_tag, nombre, precio, peso_esperado_g, stock)
-select c.id, 'TAG_GALLETAS', 'Galletas de Chocolate', 5.50, 210.00, 60
-from public.categorias c where c.nombre = 'Snacks'
-on conflict (codigo_tag) do nothing;
-
-insert into public.productos (categoria_id, codigo_tag, nombre, precio, peso_esperado_g, stock)
-select c.id, 'TAG_JUGO_1L', 'Jugo de Naranja 1 Litro', 10.00, 1060.00, 30
-from public.categorias c where c.nombre = 'Bebidas'
-on conflict (codigo_tag) do nothing;
-
--- ============================================================================
--- FIN DEL SCRIPT
--- ============================================================================
+-- Reiniciar secuencia para evitar colisiones
+select setval('products_id_seq', (select coalesce(max(id), 1) from public.products));
