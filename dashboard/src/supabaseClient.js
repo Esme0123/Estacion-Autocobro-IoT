@@ -3,7 +3,7 @@ import { createClient } from '@supabase/supabase-js'
 // Normalización de la URL de Supabase para evitar sufijos '/rest/v1' que invalidan el SDK
 const rawUrl = import.meta.env.VITE_SUPABASE_URL || 'https://tu-proyecto.supabase.co'
 const cleanUrl = rawUrl.replace(/\/rest\/v1\/?$/, '').trim()
-const supabaseKey = (import.meta.env.VITE_SUPABASE_ANON_KEY || 'tu_anon_key_publica').trim()
+const supabaseKey = (import.meta.env.VITE_SUPABASE_ANON_KEY || import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY || 'tu_anon_key_publica').trim()
 
 export const isSupabaseConfigured =
   !cleanUrl.includes('tu-proyecto') &&
@@ -22,79 +22,43 @@ export const supabase = createClient(cleanUrl, supabaseKey, {
   }
 })
 
-// Catálogo base predeterminado para garantizar operación continua, pruebas y modo demostración
+// Catálogo base predeterminado alineado con los datos reales en PostgreSQL
 export const DEFAULT_PRODUCTS = [
   {
     id: 1,
-    name: 'Leche Entera 1 Litro',
-    barcode: '7771234001',
-    rfid_uid: 'TAG_LECHE_1L',
-    price: 7.5,
-    expected_weight_g: 1025.0,
-    stock: 40,
+    name: 'Arroz 1 kg',
+    barcode: '100001',
+    rfid_uid: '100001',
+    price: 8.5,
+    expected_weight_g: 1000.0,
+    stock: 30,
     active: true,
-    description: 'Leche pasteurizada en bolsa de 1000 ml',
-    image_url: '🥛'
+    description: 'Arroz de grano largo 1 kg',
+    image_url: '🌾'
   },
   {
     id: 2,
-    name: 'Pan de Molde 500g',
-    barcode: '7771234002',
-    rfid_uid: 'TAG_PAN_500G',
-    price: 12.0,
-    expected_weight_g: 510.0,
-    stock: 8, // Stock bajo (< 10) para alertar al Gerente
+    name: 'Azucar 1 kg',
+    barcode: '100002',
+    rfid_uid: '100002',
+    price: 7.0,
+    expected_weight_g: 1000.0,
+    stock: 25,
     active: true,
-    description: 'Pan blanco rebanado familiar',
-    image_url: '🍞'
+    description: 'Azúcar blanca refinada 1 kg',
+    image_url: '🍬'
   },
   {
     id: 3,
-    name: 'Galletas de Chocolate 200g',
-    barcode: '7771234003',
-    rfid_uid: 'TAG_GALLETAS',
+    name: 'Fideos 400 g',
+    barcode: '100003',
+    rfid_uid: '100003',
     price: 5.5,
-    expected_weight_g: 210.0,
-    stock: 60,
+    expected_weight_g: 400.0,
+    stock: 40,
     active: true,
-    description: 'Galletas rellenas con crema de cacao',
-    image_url: '🍪'
-  },
-  {
-    id: 4,
-    name: 'Jugo de Naranja 1 Litro',
-    barcode: '7771234004',
-    rfid_uid: 'TAG_JUGO_1L',
-    price: 10.0,
-    expected_weight_g: 1060.0,
-    stock: 25,
-    active: true,
-    description: 'Jugo 100% natural sin pulpa',
-    image_url: '🧃'
-  },
-  {
-    id: 5,
-    name: 'Café Tostado y Molido 250g',
-    barcode: '7771234005',
-    rfid_uid: 'TAG_CAFE_250G',
-    price: 28.0,
-    expected_weight_g: 265.0,
-    stock: 5, // Stock crítico (< 10)
-    active: true,
-    description: 'Café arábica de altura yungueño',
-    image_url: '☕'
-  },
-  {
-    id: 6,
-    name: 'Manzanas Rojas 1 kg',
-    barcode: '7771234006',
-    rfid_uid: 'TAG_MANZANAS_1KG',
-    price: 14.0,
-    expected_weight_g: 1005.0,
-    stock: 32,
-    active: true,
-    description: 'Manzanas rojas frescas de exportación',
-    image_url: '🍎'
+    description: 'Fideos en paquete de 400 g',
+    image_url: '🍝'
   }
 ]
 
@@ -109,7 +73,6 @@ export async function getProductsFromDB() {
       .order('id', { ascending: true })
 
     if (error || !data || data.length === 0) {
-      // Fallback a almacenamiento local o productos por defecto
       const local = localStorage.getItem('local_products')
       if (local) {
         try { return JSON.parse(local) } catch {}
@@ -117,12 +80,11 @@ export async function getProductsFromDB() {
       return DEFAULT_PRODUCTS
     }
 
-    // Normalizar atributos en caso de que falten en columnas
     const normalized = data.map((p, idx) => ({
       ...p,
-      rfid_uid: p.rfid_uid || p.barcode || `TAG_${p.id}`,
-      stock: typeof p.stock === 'number' ? p.stock : (DEFAULT_PRODUCTS[idx]?.stock ?? 20),
-      image_url: p.image_url || DEFAULT_PRODUCTS.find(dp => dp.barcode === p.barcode)?.image_url || '📦'
+      rfid_uid: p.barcode || `TAG_${p.id}`,
+      stock: DEFAULT_PRODUCTS[idx]?.stock ?? 20, // Stock manejado en cliente (no existe columna en tabla)
+      image_url: DEFAULT_PRODUCTS.find(dp => dp.barcode === p.barcode)?.image_url || '📦'
     }))
     localStorage.setItem('local_products', JSON.stringify(normalized))
     return normalized
@@ -137,11 +99,12 @@ export async function saveProductToDB(product) {
   let savedProduct = { ...product }
   
   try {
+    // Mapeo exacto de los campos de la tabla `products`
     const payload = {
       name: product.name,
-      barcode: product.barcode,
+      barcode: product.barcode || product.rfid_uid,
       price: parseFloat(product.price),
-      expected_weight_g: parseFloat(product.expected_weight_g),
+      expected_weight_g: parseFloat(product.expected_weight_g || 0),
       active: product.active ?? true,
       description: product.description || ''
     }
@@ -152,21 +115,24 @@ export async function saveProductToDB(product) {
         .update(payload)
         .eq('id', product.id)
         .select()
-        .single()
+        .maybeSingle() // <-- .maybeSingle() previene el error PGRST116 / 406
 
       if (!error && data) {
         savedProduct = { ...savedProduct, ...data }
+      } else if (error) {
+        console.warn('Error al actualizar producto en Supabase:', error.message)
       }
     } else {
       const { data, error } = await supabase
         .from('products')
         .insert([payload])
         .select()
-        .single()
+        .maybeSingle() // <-- .maybeSingle() previene el error PGRST116 / 406
 
       if (!error && data) {
         savedProduct = { ...savedProduct, ...data }
       } else {
+        if (error) console.warn('Error al insertar producto en Supabase:', error.message)
         savedProduct.id = Date.now()
       }
     }
@@ -175,7 +141,7 @@ export async function saveProductToDB(product) {
     if (!savedProduct.id) savedProduct.id = Date.now()
   }
 
-  // Actualizar copia en localStorage
+  // Actualizar copia local con stock virtual
   try {
     const local = JSON.parse(localStorage.getItem('local_products') || '[]')
     const idx = local.findIndex(p => p.id === savedProduct.id)
@@ -212,7 +178,7 @@ export async function getPurchasesFromDB() {
     const { data: purchases, error } = await supabase
       .from('purchases')
       .select('*, purchase_items(*)')
-      .order('created_at', { ascending: false })
+      .order('started_at', { ascending: false })
       .limit(30)
 
     if (error || !purchases || purchases.length === 0) {
@@ -228,11 +194,13 @@ export async function getPurchasesFromDB() {
 }
 
 export async function recordCompletedPurchase({ items, total, paymentMethod, measuredWeightG, customerId }) {
+  // `status` debe respetar el CHECK de PostgreSQL ('pagada')
   const purchasePayload = {
     total: parseFloat(total),
-    status: 'COMPLETED',
+    status: 'pagada',
     customer_id: customerId || null,
-    created_at: new Date().toISOString()
+    started_at: new Date().toISOString(),
+    finished_at: new Date().toISOString()
   }
 
   let purchaseId = Date.now()
@@ -242,37 +210,37 @@ export async function recordCompletedPurchase({ items, total, paymentMethod, mea
       .from('purchases')
       .insert([purchasePayload])
       .select()
-      .single()
+      .maybeSingle() // <-- .maybeSingle() evita excepciones de 0 filas
 
     if (!pError && createdPurchase) {
       purchaseId = createdPurchase.id
 
-      // Insertar items
+      // `product_name` es una columna NOT NULL en `purchase_items`
       const itemsPayload = items.map(item => ({
         purchase_id: purchaseId,
-        product_id: item.id,
+        product_id: typeof item.id === 'number' ? item.id : null,
+        product_name: item.name || 'Producto General',
         quantity: item.quantity,
         unit_price: parseFloat(item.price),
         subtotal: parseFloat((item.price * item.quantity).toFixed(2)),
-        measured_weight_g: parseFloat(item.expected_weight_g * item.quantity),
-        created_at: new Date().toISOString()
+        measured_weight_g: parseFloat((item.expected_weight_g || 0) * item.quantity)
       }))
 
       await supabase.from('purchase_items').insert(itemsPayload)
+    } else if (pError) {
+      console.warn('Error insertando compra en Supabase:', pError.message)
     }
   } catch (err) {
     console.warn('Error al registrar compra en Supabase, procesando local:', err)
   }
 
-  // Descontar automáticamente el stock de los productos
+  // Actualización de inventario local
   try {
     const local = JSON.parse(localStorage.getItem('local_products') || JSON.stringify(DEFAULT_PRODUCTS))
     const updated = local.map(prod => {
       const itemSold = items.find(i => i.id === prod.id)
       if (itemSold) {
         const newStock = Math.max(0, (prod.stock ?? 20) - itemSold.quantity)
-        // Intentar actualizar también en Supabase si la columna existe
-        supabase.from('products').update({ stock: newStock }).eq('id', prod.id).then(() => {}).catch(() => {})
         return { ...prod, stock: newStock }
       }
       return prod
@@ -280,14 +248,14 @@ export async function recordCompletedPurchase({ items, total, paymentMethod, mea
     localStorage.setItem('local_products', JSON.stringify(updated))
   } catch {}
 
-  // Guardar historial local de compras
+  // Guardar historial local
   const localPurchase = {
     id: purchaseId,
     total: parseFloat(total),
-    status: 'COMPLETED',
+    status: 'pagada',
     payment_method: paymentMethod || 'TARJETA',
     measured_weight_g: measuredWeightG || 0,
-    created_at: new Date().toISOString(),
+    started_at: new Date().toISOString(),
     purchase_items: items.map(i => ({
       id: Date.now() + Math.random(),
       purchase_id: purchaseId,
@@ -296,7 +264,7 @@ export async function recordCompletedPurchase({ items, total, paymentMethod, mea
       quantity: i.quantity,
       unit_price: i.price,
       subtotal: (i.price * i.quantity).toFixed(2),
-      measured_weight_g: i.expected_weight_g * i.quantity
+      measured_weight_g: (i.expected_weight_g || 0) * i.quantity
     }))
   }
 
@@ -332,14 +300,18 @@ export async function getSensorReadingsFromDB(limit = 20) {
   }
 }
 
-export async function insertSensorReading({ sensor_type, numeric_value, rfid_uid, device_id = 'CAJA_IOT_01', metadata = {} }) {
+export async function insertSensorReading({ sensor_type, numeric_value, rfid_uid, device_id = 1, metadata = {} }) {
+  // `sensor_type` debe cumplir con la restricción CHECK de PostgreSQL
+  const validSensorType = ['magnetico', 'proximidad', 'hx711', 'rc522'].includes(sensor_type)
+    ? sensor_type
+    : 'rc522'
+
   const reading = {
-    sensor_type,
+    sensor_type: validSensorType,
     numeric_value: typeof numeric_value === 'number' ? numeric_value : parseFloat(numeric_value || 0),
     rfid_uid: rfid_uid || null,
-    device_id,
-    metadata,
-    created_at: new Date().toISOString()
+    device_id: typeof device_id === 'number' ? device_id : 1, // Exige tipo BIGINT
+    metadata
   }
 
   try {
@@ -347,17 +319,18 @@ export async function insertSensorReading({ sensor_type, numeric_value, rfid_uid
       .from('sensor_readings')
       .insert([reading])
       .select()
-      .single()
+      .maybeSingle() // <-- .maybeSingle() previene el error PGRST116 / 406
 
     if (!error && data) return data
   } catch (err) {
     console.warn('Error inserting reading to Supabase:', err)
   }
 
-  // Backup en localStorage para simulación y offline
+  // Backup local
   try {
     const local = JSON.parse(localStorage.getItem('local_readings') || '[]')
     reading.id = Date.now()
+    reading.created_at = new Date().toISOString()
     local.unshift(reading)
     localStorage.setItem('local_readings', JSON.stringify(local.slice(0, 50)))
   } catch {}
