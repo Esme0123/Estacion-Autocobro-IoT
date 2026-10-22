@@ -242,22 +242,23 @@ export default function AdminSuite({ products, onProductsChanged }) {
   }, [readings])
 
   const sensorActivityData = useMemo(() => {
-    const rc522Count = readings.filter(r => r.sensor_type === 'rc522').length
-    const hx711Count = readings.filter(r => r.sensor_type === 'hx711' || r.sensor_type === 'weight').length
-    const proximityCount = readings.filter(r => r.sensor_type === 'proximidad' || r.sensor_type === 'magnetico').length
+  const rc522Count = readings.filter(r => r.sensor_type === 'rc522').length;
+  const hx711Count = readings.filter(r => r.sensor_type === 'hx711' || r.sensor_type === 'weight').length;
+  const proximityCount = readings.filter(r => r.sensor_type === 'proximidad').length;
+  const magneticCount = readings.filter(r => r.sensor_type === 'magnetico').length;
 
-    return {
-      labels: ['RFID RC522', 'Báscula HX711', 'Proximidad/Salida'],
-      datasets: [
-        {
-          label: 'Eventos Detectados',
-          data: [rc522Count, hx711Count, proximityCount],
-          backgroundColor: ['#de7272', '#ffca88', '#b4e4d6'],
-          borderRadius: 8
-        }
-      ]
-    }
-  }, [readings])
+  return {
+    labels: ['RFID RC522', 'Báscula HX711', 'Proximidad IR', 'Sensor Magnético'],
+    datasets: [
+      {
+        label: 'Eventos Detectados',
+        data: [rc522Count, hx711Count, proximityCount, magneticCount],
+        backgroundColor: ['#de7272', '#ffca88', '#b4e4d6', '#ffb3ba'],
+        borderRadius: 8
+      }
+    ]
+  };
+}, [readings]);
 
   return (
     <div className="admin-container">
