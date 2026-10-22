@@ -219,7 +219,7 @@ export default function AdminSuite({ products, onProductsChanged }) {
   const weightChartData = useMemo(() => {
     const weightReadings = readings
       .filter(r => r.sensor_type === 'hx711' || r.sensor_type === 'weight')
-      .slice(0, 15)
+      .slice(0, 30)
       .reverse()
 
     return {
