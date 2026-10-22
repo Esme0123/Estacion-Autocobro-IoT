@@ -40,7 +40,7 @@ export default function Dashboard({ session }) {
       .channel('lecturas-iot-realtime')
       .on(
         'postgres_changes',
-        { event: 'INSERT', schema: 'public', table: 'lecturas_iot' },
+        { event: 'INSERT', schema: 'public', table: 'sensor_readings' }
         (payload) => {
           setLecturas((prev) => [payload.new, ...prev].slice(0, LIMITE))
         }
