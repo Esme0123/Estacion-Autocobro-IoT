@@ -136,14 +136,15 @@ export default function SelfCheckout({ products, onStockUpdated }) {
   // OPERACIONES DE CARRITO
   // -------------------------------------------------------------
   function addProductByCode(code) {
-    if (!code) return
-    const cleaned = code.trim().toUpperCase()
-    const found = products.find(
-      (p) =>
-        p.barcode?.toUpperCase() === cleaned ||
-        p.rfid_uid?.toUpperCase() === cleaned ||
-        p.name?.toUpperCase().includes(cleaned)
-    )
+  if (!code) return
+  
+  const cleaned = code.replace(/[^a-zA-Z0-9]/g, '').toUpperCase()
+
+  const found = products.find((p) => {
+    const prodBarcode = (p.barcode || '').replace(/[^a-zA-Z0-9]/g, '').toUpperCase()
+    const prodRfid = (p.rfid_uid || '').replace(/[^a-zA-Z0-9]/g, '').toUpperCase()
+    return prodBarcode === cleaned || prodRfid === cleaned || p.name?.toUpperCase().includes(cleaned)
+  })
 
     if (!found) {
       showToast(`No se encontró producto con código: ${code}`, 'error')
