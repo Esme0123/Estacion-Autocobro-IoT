@@ -541,7 +541,18 @@ export default function AdminSuite({ products, onProductsChanged }) {
                   purchases.map((pur) => (
                     <tr key={pur.id}>
                       <td><strong>#{pur.id}</strong></td>
-                      <td>{new Date(pur.created_at).toLocaleString()}</td>
+                      <td>
+  {pur.created_at && !isNaN(new Date(pur.created_at).getTime())
+    ? new Date(pur.created_at).toLocaleString('es-BO', {
+        day: '2-digit',
+        month: '2-digit',
+        year: 'numeric',
+        hour: '2-digit',
+        minute: '2-digit',
+        hour12: true
+      })
+    : 'Reciente'}
+</td>
                       <td>
                         <span style={{
                           fontSize: 11,
