@@ -103,6 +103,8 @@ export async function saveProductToDB(product) {
     const payload = {
       name: product.name,
       barcode: product.barcode || product.rfid_uid,
+      rfid_uid: product.rfid_uid || product.barcode,
+      image_url: product.image_url || '📦',
       price: parseFloat(product.price),
       expected_weight_g: parseFloat(product.expected_weight_g || 0),
       active: product.active ?? true,
@@ -173,13 +175,13 @@ export async function deleteProductFromDB(id) {
 // -------------------------------------------------------------
 // SERVICIOS DE COMPRAS Y SALIDA DE MERCADERÍA
 // -------------------------------------------------------------
-export async function getPurchasesFromDB() {
+export async function getPurchasesFromDB(limit = 100) {
   try {
     const { data: purchases, error } = await supabase
       .from('purchases')
       .select('*, purchase_items(*)')
       .order('started_at', { ascending: false })
-      .limit(30)
+      .limit(limit)
 
     if (error || !purchases || purchases.length === 0) {
       const local = localStorage.getItem('local_purchases')

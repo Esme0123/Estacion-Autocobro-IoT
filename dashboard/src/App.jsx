@@ -57,10 +57,11 @@ function AppContent({ session, setSession, role, setRole }) {
   }
 
   const isLoginPage = location.pathname === '/login'
+  const isAdminPage = location.pathname.startsWith('/admin')
 
   return (
     <div>
-      {!isLoginPage && (
+      {!isLoginPage && !isAdminPage && (
         <Navbar
           session={session}
           role={role}
@@ -102,11 +103,17 @@ function AppContent({ session, setSession, role, setRole }) {
         />
 
         <Route
-          path="/admin"
+          path="/admin/*"
           element={
             <AdminSuite
               products={products}
               onProductsChanged={reloadProducts}
+              session={session}
+              role={role}
+              onLogout={handleLogout}
+              onToggleSimulator={() => setIsSimulatorOpen(!isSimulatorOpen)}
+              isSimulatorOpen={isSimulatorOpen}
+              realtimeOk={realtimeOk}
             />
           }
         />
