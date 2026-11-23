@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo, useCallback } from 'react'
+import { useState, useEffect, useMemo, useCallback, useRef } from 'react'
 import { Link } from 'react-router-dom'
 import {
   Scale,
@@ -32,6 +32,9 @@ export default function IoTResumen({ readings: initialReadings = [], onRefresh, 
   const [latestReadings, setLatestReadings] = useState({})
   const [recentEvents, setRecentEvents] = useState([])
   const [loading, setLoading] = useState(true)
+  const [errorMsg, setErrorMsg] = useState('')
+  const [realtimeConnected, setRealtimeConnected] = useState(false)
+  const isRefreshingRef = useRef(false)
 
   // -------------------------------------------------------------
   // CARGA DE DISPOSITIVOS REGISTRADOS (sensor_devices)
@@ -115,11 +118,21 @@ export default function IoTResumen({ readings: initialReadings = [], onRefresh, 
   }, [initialReadings])
 
   // -------------------------------------------------------------
-  // DISPATCHER PRINCIPAL
+  // DISPATCHER PRINCIPAL Y ACTUALIZACIÓN MANUAL
   // -------------------------------------------------------------
-  const reloadData = useCallback(async () => {
+  const reloadData = useCallback(async (isManual = false) => {
+    if (isRefreshingRef.current) return
+    isRefreshingRef.current = true
     setLoading(true)
+    setErrorMsg('')
+
     try {
+      if (isManual && onRefresh) {
+        try {
+          await onRefresh()
+        } catch (e) {}
+      }
+
       const devList = await loadDevices()
       setDevices(devList)
 
@@ -132,17 +145,19 @@ export default function IoTResumen({ readings: initialReadings = [], onRefresh, 
       setRecentEvents(eventsList)
     } catch (err) {
       console.error('Error cargando resumen de sensores:', err)
+      setErrorMsg('No se pudieron obtener todas las lecturas del servidor. Se conservan los datos actuales.')
     } finally {
       setLoading(false)
+      isRefreshingRef.current = false
     }
-  }, [loadDevices, loadLatestStates, loadRecentEvents])
+  }, [loadDevices, loadLatestStates, loadRecentEvents, onRefresh])
 
   useEffect(() => {
-    reloadData()
+    reloadData(false)
   }, [reloadData])
 
   // -------------------------------------------------------------
-  // SUSCRIPCIÓN EN TIEMPO REAL
+  // SUSCRIPCIÓN EN TIEMPO REAL (SUPABASE REALTIME)
   // -------------------------------------------------------------
   useEffect(() => {
     const channel = supabase
@@ -151,23 +166,47 @@ export default function IoTResumen({ readings: initialReadings = [], onRefresh, 
         const newReading = payload.new
         if (!newReading) return
 
-        // Actualizar último estado del sensor
-        if (newReading.sensor_type) {
+        // 1. Normalizar tipo de sensor ('weight' -> 'hx711')
+        const rawType = (newReading.sensor_type || '').toLowerCase().trim()
+        const type = rawType === 'weight' ? 'hx711' : rawType
+
+        // 2. Actualizar último estado del sensor correspondiente
+        if (type) {
           setLatestReadings((prev) => ({
             ...prev,
-            [newReading.sensor_type]: newReading
+            [type]: newReading
           }))
         }
 
-        // Agregar a la lista de actividad reciente (máximo 10)
-        setRecentEvents((prev) => [newReading, ...prev.filter((r) => r.id !== newReading.id)].slice(0, 10))
+        // 3. Agregar a la lista de actividad reciente (ordenado cronológicamente más reciente primero, máx 10)
+        setRecentEvents((prev) => {
+          const withoutDup = prev.filter((r) => r.id !== newReading.id)
+          return [newReading, ...withoutDup]
+            .sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime())
+            .slice(0, 10)
+        })
       })
-      .subscribe()
+      .subscribe((status) => {
+        if (status === 'SUBSCRIBED') {
+          setRealtimeConnected(true)
+        } else if (status === 'CHANNEL_ERROR' || status === 'TIMED_OUT' || status === 'CLOSED') {
+          setRealtimeConnected(false)
+        }
+      })
 
     return () => {
       supabase.removeChannel(channel)
     }
   }, [])
+
+  // Polling de respaldo cada 25 segundos SOLO si Realtime no está conectado
+  useEffect(() => {
+    if (realtimeConnected) return
+    const interval = setInterval(() => {
+      reloadData(false)
+    }, 25000)
+    return () => clearInterval(interval)
+  }, [realtimeConnected, reloadData])
 
   // -------------------------------------------------------------
   // RESUMEN COMPACTO DEL SISTEMA
@@ -215,13 +254,13 @@ export default function IoTResumen({ readings: initialReadings = [], onRefresh, 
           <button
             type="button"
             className="btn-ghost"
-            onClick={reloadData}
-            disabled={loading}
+            onClick={() => reloadData(true)}
+            disabled={loading || loadingReadings}
             title="Refrescar estado de sensores"
             style={{ fontSize: 12, padding: '7px 14px' }}
           >
-            <RefreshCw size={13} className={loading ? 'spin-icon' : ''} />
-            <span>{loading ? 'Cargando...' : 'Actualizar'}</span>
+            <RefreshCw size={13} className={loading || loadingReadings ? 'spin-icon' : ''} />
+            <span>{loading || loadingReadings ? 'Actualizando...' : 'Actualizar'}</span>
           </button>
 
           <Link
@@ -234,6 +273,12 @@ export default function IoTResumen({ readings: initialReadings = [], onRefresh, 
           </Link>
         </div>
       </div>
+
+      {errorMsg && (
+        <div style={{ padding: '10px 16px', background: 'var(--coral-light)', color: 'var(--coral-dark)', borderRadius: 8, fontSize: 13, fontWeight: 600, marginBottom: 16 }}>
+          {errorMsg}
+        </div>
+      )}
 
       {/* =========================================================
           RESUMEN COMPACTO (4 MÉTRICAS DE HARDWARE)
@@ -305,7 +350,19 @@ export default function IoTResumen({ readings: initialReadings = [], onRefresh, 
           } else if (dev.sensor_type === 'rc522') {
             IconComponent = Radio
             iconColor = '#8c681f'
-            stateLabel = latest ? 'Lectura de tag registrada' : 'Sin datos'
+            if (latest) {
+              if (latest.metadata?.product_name && latest.metadata.product_name !== 'Desconocido') {
+                stateLabel = latest.metadata.product_name
+              } else if (latest.rfid_uid) {
+                stateLabel = `Tag: ${latest.rfid_uid}`
+              } else if (latest.metadata?.event) {
+                stateLabel = latest.metadata.event
+              } else {
+                stateLabel = 'Lectura de tag registrada'
+              }
+            } else {
+              stateLabel = 'Sin datos'
+            }
             stateColor = '#8c681f'
           }
 

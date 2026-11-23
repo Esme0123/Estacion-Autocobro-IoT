@@ -86,6 +86,34 @@ export function getSensorPeriodRange(preset, customStart = null, customEnd = nul
 }
 
 /**
+ * Determina si una lectura de sensor pertenece al período de tiempo activo.
+ * - Para períodos predefinidos continuos ('24_HORAS', '7_DIAS', '30_DIAS'),
+ *   verifica que la lectura haya ocurrido después de la fecha de inicio del período móvil.
+ * - Para 'PERSONALIZADO', valida que esté estrictamente en el intervalo [start, end).
+ */
+export function isReadingInPeriod(reading, activePeriod) {
+  if (!reading || !reading.created_at) return false
+  const t = new Date(reading.created_at).getTime()
+  if (isNaN(t)) return false
+
+  const startMs = activePeriod.start instanceof Date
+    ? activePeriod.start.getTime()
+    : new Date(activePeriod.start).getTime()
+
+  if (activePeriod.preset === 'PERSONALIZADO') {
+    const endMs = activePeriod.end instanceof Date
+      ? activePeriod.end.getTime()
+      : new Date(activePeriod.end).getTime()
+    return t >= startMs && t < endMs
+  }
+
+  // Para ventanas continuas (24_HORAS, 7_DIAS, 30_DIAS):
+  // La lectura pertenece al período si su timestamp es posterior al inicio.
+  // Se añade 60 segundos de tolerancia a futuro para compensar diferencias de reloj del cliente.
+  return t >= startMs && t <= Date.now() + 60 * 1000
+}
+
+/**
  * Determina el estado de salud de comunicación de un sensor.
  */
 export function getSensorHealth(device, latestReading) {
