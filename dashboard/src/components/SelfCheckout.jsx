@@ -17,7 +17,8 @@ import {
   PackageCheck,
   LogOut,
   RefreshCw,
-  Sparkles
+  Sparkles,
+  HelpCircle
 } from 'lucide-react'
 import { supabase, recordCompletedPurchase } from '../supabaseClient'
 
@@ -40,7 +41,12 @@ function playBeep(freq = 880, type = 'sine', duration = 0.12) {
   } catch {}
 }
 
-export default function SelfCheckout({ products, onStockUpdated }) {
+export default function SelfCheckout({ products, onStockUpdated, role, onShowTutorial }) {
+  // El tutorial se ofrece en la vista de cajero solo al rol Cliente
+  const canShowTutorial =
+    typeof onShowTutorial === 'function' &&
+    String(role || '').trim().toUpperCase() === 'CLIENTE'
+
   // Estado del Carrito
   const [cart, setCart] = useState([])
   const [searchInput, setSearchInput] = useState('')
@@ -257,6 +263,21 @@ export default function SelfCheckout({ products, onStockUpdated }) {
         <div className={`toast-notice ${toast.type}`}>
           {toast.type === 'success' ? <CheckCircle size={18} /> : <AlertTriangle size={18} />}
           <span>{toast.message}</span>
+        </div>
+      )}
+
+      {/* Acceso manual al tutorial */}
+      {canShowTutorial && (
+        <div className="tutorial-reopen-row">
+          <button
+            type="button"
+            className="tutorial-reopen-btn"
+            onClick={onShowTutorial}
+            title="Volver a ver el tutorial de autocobro"
+          >
+            <HelpCircle size={15} />
+            <span>¿Ver Tutorial?</span>
+          </button>
         </div>
       )}
 

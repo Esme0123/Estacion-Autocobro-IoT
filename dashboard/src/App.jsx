@@ -6,6 +6,33 @@ import AuthScreen from './components/AuthScreen'
 import SelfCheckout from './components/SelfCheckout'
 import AdminSuite from './components/AdminSuite'
 import IoTSimulatorDrawer from './components/IoTSimulatorDrawer'
+import TutorialModal, { TUTORIAL_STORAGE_KEY } from './components/TutorialModal'
+
+// Rol normalizado: el tutorial solo aplica al rol Cliente / Usuario.
+function isClienteRole(value) {
+  return String(value || '').trim().toUpperCase() === 'CLIENTE'
+}
+
+// sessionStorage puede fallar en navegación privada estricta: no debe romper el login.
+function tutorialAlreadyShown() {
+  try {
+    return sessionStorage.getItem(TUTORIAL_STORAGE_KEY) === '1'
+  } catch {
+    return false
+  }
+}
+
+function markTutorialAsShown() {
+  try {
+    sessionStorage.setItem(TUTORIAL_STORAGE_KEY, '1')
+  } catch {}
+}
+
+function resetTutorialFlag() {
+  try {
+    sessionStorage.removeItem(TUTORIAL_STORAGE_KEY)
+  } catch {}
+}
 
 function AppContent({ session, setSession, role, setRole }) {
   const navigate = useNavigate()
@@ -14,6 +41,7 @@ function AppContent({ session, setSession, role, setRole }) {
   const [loading, setLoading] = useState(true)
   const [realtimeOk, setRealtimeOk] = useState(false)
   const [isSimulatorOpen, setIsSimulatorOpen] = useState(false)
+  const [tutorialOpen, setTutorialOpen] = useState(false)
 
   const reloadProducts = useCallback(async () => {
     const list = await getProductsFromDB()
@@ -45,9 +73,22 @@ function AppContent({ session, setSession, role, setRole }) {
     } catch {}
     setSession(null)
     setRole(null)
+    setTutorialOpen(false)
+    resetTutorialFlag()
     localStorage.removeItem('demo_role')
     localStorage.removeItem('demo_session')
     navigate('/login')
+  }
+
+  // Salvaguarda: el tutorial nunca se muestra a Admin/Gerente ni en el panel admin.
+  useEffect(() => {
+    if (!isClienteRole(role) || location.pathname.startsWith('/admin')) {
+      setTutorialOpen(false)
+    }
+  }, [role, location.pathname])
+
+  function handleShowTutorial() {
+    if (isClienteRole(role)) setTutorialOpen(true)
   }
 
   // Notificación al emitir una lectura en el simulador
@@ -86,6 +127,12 @@ function AppContent({ session, setSession, role, setRole }) {
                   setRole(r)
                   localStorage.setItem('demo_session', JSON.stringify(newSession))
                   localStorage.setItem('demo_role', r)
+
+                  // Tutorial automático SOLO para Cliente, una vez por inicio de sesión.
+                  if (isClienteRole(r) && !tutorialAlreadyShown()) {
+                    markTutorialAsShown()
+                    setTutorialOpen(true)
+                  }
                 }}
               />
             )
@@ -98,6 +145,8 @@ function AppContent({ session, setSession, role, setRole }) {
             <SelfCheckout
               products={products}
               onStockUpdated={reloadProducts}
+              role={role}
+              onShowTutorial={handleShowTutorial}
             />
           }
         />
@@ -124,6 +173,9 @@ function AppContent({ session, setSession, role, setRole }) {
           element={<Navigate to={session ? (role === 'ADMIN' ? '/admin' : '/cajero') : '/login'} replace />}
         />
       </Routes>
+
+      {/* Tutorial de autocobro (solo Cliente / Cliente que lo reabre manualmente) */}
+      <TutorialModal open={tutorialOpen} onClose={() => setTutorialOpen(false)} />
 
       {/* Consola Flotante de Simulación IoT ESP32 */}
       <IoTSimulatorDrawer

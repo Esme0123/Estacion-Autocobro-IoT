@@ -426,6 +426,41 @@ h1, h2, h3, h4, h5, h6 {
   padding: 24px;
 }
 
+/* Acceso manual discreto al tutorial de autocobro */
+.tutorial-reopen-row {
+  display: flex;
+  justify-content: flex-end;
+  margin-bottom: 10px;
+}
+
+.tutorial-reopen-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 12px;
+  border-radius: 999px;
+  border: 1px solid var(--border);
+  background: #fff;
+  color: var(--muted);
+  font-family: inherit;
+  font-size: 12px;
+  font-weight: 700;
+  cursor: pointer;
+  transition: var(--transition);
+}
+
+.tutorial-reopen-btn:hover {
+  border-color: var(--peach);
+  background: var(--cream-light);
+  color: #8c681f;
+}
+
+@media (max-width: 560px) {
+  .tutorial-reopen-row {
+    justify-content: center;
+  }
+}
+
 /* Pasos visuales del flujo */
 .steps-progress {
   display: flex;
