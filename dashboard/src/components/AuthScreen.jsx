@@ -1,7 +1,14 @@
 import { useState } from 'react'
-import { ShoppingCart, LogIn, UserPlus, Shield, UserCheck, AlertCircle } from 'lucide-react'
+import { BarChart3, ShoppingCart, LogIn, UserPlus, Shield, AlertCircle } from 'lucide-react'
 import { useNavigate } from 'react-router-dom'
 import { supabase, isSupabaseConfigured } from '../supabaseClient'
+import { ROLE, normalizeRole, getHomePath } from '../utils/roles'
+
+const DEMO_USERS = {
+  [ROLE.CLIENTE]: { id: 'demo-cliente-id', email: 'cliente@ucb.edu.bo', nombre: 'Cliente Autocobro' },
+  [ROLE.GERENTE]: { id: 'demo-gerente-id', email: 'gerente@ucb.edu.bo', nombre: 'Gerente de Cajas' },
+  [ROLE.ADMIN]: { id: 'demo-admin-id', email: 'admin@ucb.edu.bo', nombre: 'Administrador General' }
+}
 
 export default function AuthScreen({ onAuth }) {
   const navigate = useNavigate()
@@ -9,7 +16,7 @@ export default function AuthScreen({ onAuth }) {
   const [nombre, setNombre] = useState('')
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
-  const [rol, setRol] = useState('CLIENTE')
+  const [rol, setRol] = useState(ROLE.CLIENTE)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
   const [ok, setOk] = useState('')
@@ -21,24 +28,22 @@ export default function AuthScreen({ onAuth }) {
 
   // Ingreso Rápido para Demostraciones
   function handleQuickDemo(selectedRole) {
+    const normalized = normalizeRole(selectedRole)
+    const demo = DEMO_USERS[normalized]
     const demoUser = {
-      id: selectedRole === 'ADMIN' ? 'demo-admin-id' : 'demo-cliente-id',
-      email: selectedRole === 'ADMIN' ? 'gerente@ucb.edu.bo' : 'cliente@ucb.edu.bo',
+      id: demo.id,
+      email: demo.email,
       user_metadata: {
-        nombre_completo: selectedRole === 'ADMIN' ? 'Gerente / Administrador' : 'Cliente Autocobro',
-        rol: selectedRole
+        nombre_completo: demo.nombre,
+        rol: normalized
       }
     }
     const demoSession = {
       user: demoUser,
       access_token: 'demo-token-' + Date.now()
     }
-    onAuth?.(demoSession, selectedRole)
-    if (selectedRole === 'ADMIN') {
-      navigate('/admin')
-    } else {
-      navigate('/cajero')
-    }
+    onAuth?.(demoSession, normalized)
+    navigate(getHomePath(normalized), { replace: true })
   }
 
   async function handleLogin(e) {
@@ -59,14 +64,9 @@ export default function AuthScreen({ onAuth }) {
         return
       }
 
-      const userRole = data.session?.user?.user_metadata?.rol || 'CLIENTE'
+      const userRole = normalizeRole(data.session?.user?.user_metadata?.rol || ROLE.CLIENTE)
       onAuth?.(data.session, userRole)
-
-      if (userRole === 'ADMIN' || userRole === 'SUPERVISOR') {
-        navigate('/admin')
-      } else {
-        navigate('/cajero')
-      }
+      navigate(getHomePath(userRole), { replace: true })
     } catch (err) {
       setLoading(false)
       setError('Excepción en autenticación: ' + err.message)
@@ -100,12 +100,9 @@ export default function AuthScreen({ onAuth }) {
         return
       }
 
-      onAuth?.(data.session, rol)
-      if (rol === 'ADMIN' || rol === 'SUPERVISOR') {
-        navigate('/admin')
-      } else {
-        navigate('/cajero')
-      }
+      const normalized = normalizeRole(rol)
+      onAuth?.(data.session, normalized)
+      navigate(getHomePath(normalized), { replace: true })
     } catch (err) {
       setLoading(false)
       setError('Excepción en registro: ' + err.message)
@@ -125,28 +122,39 @@ export default function AuthScreen({ onAuth }) {
 
         {/* ACCESO RÁPIDO PARA PRESENTACIONES Y EVALUACIÓN */}
         <div className="quick-demo-roles">
-          <p>⚡ Acceso Rápido de Evaluación (Doble Rol):</p>
+          <p>⚡ Acceso Rápido de Evaluación (3 Roles):</p>
           <div className="demo-buttons-grid">
             <button
               type="button"
               className="demo-btn cajero"
-              onClick={() => handleQuickDemo('CLIENTE')}
+              onClick={() => handleQuickDemo(ROLE.CLIENTE)}
               title="Entrar al Flujo Guiado de Autocobro con Balanza Anti-Fraude"
             >
               <ShoppingCart size={18} color="var(--mint-dark)" />
-              <span>🛍️ Rol Cliente</span>
-              <small style={{ color: 'var(--muted)', fontSize: 10 }}>Cajero Autocobro</small>
+              <span>🛒 Rol Cliente</span>
+              <small style={{ color: 'var(--muted)', fontSize: 10 }}>Terminal Autocobro</small>
+            </button>
+
+            <button
+              type="button"
+              className="demo-btn gerente"
+              onClick={() => handleQuickDemo(ROLE.GERENTE)}
+              title="Supervisión en Vivo de Cajas y Sensores IoT"
+            >
+              <Shield size={18} color="#925d10" />
+              <span>🛡️ Rol Gerente</span>
+              <small style={{ color: 'var(--muted)', fontSize: 10 }}>Supervisión de Cajas</small>
             </button>
 
             <button
               type="button"
               className="demo-btn admin"
-              onClick={() => handleQuickDemo('ADMIN')}
-              title="Entrar al Panel de Control de Inventario y Telemetría IoT"
+              onClick={() => handleQuickDemo(ROLE.ADMIN)}
+              title="Entrar al Panel de Control de Ventas, Inventario y Telemetría IoT"
             >
-              <Shield size={18} color="var(--coral)" />
-              <span>📊 Rol Gerente</span>
-              <small style={{ color: 'var(--muted)', fontSize: 10 }}>Inventario & Dashboard</small>
+              <BarChart3 size={18} color="var(--coral)" />
+              <span>📊 Rol Admin</span>
+              <small style={{ color: 'var(--muted)', fontSize: 10 }}>Ventas & Gestión Total</small>
             </button>
           </div>
         </div>
@@ -214,9 +222,9 @@ export default function AuthScreen({ onAuth }) {
                   value={rol}
                   onChange={(e) => setRol(e.target.value)}
                 >
-                  <option value="CLIENTE">Cliente (Caja Autocobro)</option>
-                  <option value="SUPERVISOR">Supervisor de Tienda</option>
-                  <option value="ADMIN">Gerente / Administrador</option>
+                  <option value="cliente">Cliente (Caja Autocobro)</option>
+                  <option value="gerente">Gerente (Supervisión de Cajas)</option>
+                  <option value="admin">Admin (Ventas &amp; Gestión Total)</option>
                 </select>
               </div>
             </>

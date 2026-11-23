@@ -7,38 +7,36 @@ import './TutorialModal.css'
 export const TUTORIAL_STORAGE_KEY = 'tutorial_autocobro_shown'
 export const TUTORIAL_TOTAL_STEPS = 6
 
-// Los seis pasos del flujo de autocobro. Los archivos actuales del proyecto
-// viven en /public/tutorial como JPG con nombres heredados (paso2b, paso3a...).
-// Si se reemplazan por /tutorial/paso1.png ... /tutorial/paso6.png, solo hay
-// que actualizar la propiedad `image` de cada paso.
+// Los seis pasos del flujo de autocobro. Las imágenes viven en
+// /public/tutorial/paso1.png ... /public/tutorial/paso6.png.
 const STEPS = [
   {
-    image: '/tutorial/paso1.jpg',
+    image: '/tutorial/paso1.png',
     title: 'Escanea tu producto',
     description: 'Pasa el código de barras por el lector o acerca la etiqueta al sensor RFID RC522. Escucharás un "bip" de confirmación.'
   },
   {
-    image: '/tutorial/paso2.jpg',
+    image: '/tutorial/paso2.png',
     title: 'Coloca todo en la báscula',
     description: 'Cada producto debe descansar sobre la báscula HX711. Si el peso no coincide con tu carrito, el pago se bloquea.'
   },
   {
-    image: '/tutorial/paso2b.jpg',
+    image: '/tutorial/paso3.png',
     title: 'Verifica el peso',
     description: 'Cuando el peso medido coincide con lo esperado (±10 g), la báscula se desbloquea en verde y podrás continuar.'
   },
   {
-    image: '/tutorial/paso3a.jpg',
+    image: '/tutorial/paso4.png',
     title: 'Realiza el pago',
     description: 'Elige tarjeta débito/crédito o pago QR simple. La pantalla te mostrará la confirmación de la transacción.'
   },
   {
-    image: '/tutorial/paso3b.jpg',
+    image: '/tutorial/paso5.png',
     title: 'Si el pago falla',
     description: 'Verifica los datos de tu tarjeta o intenta con el código QR. El carrito se conserva para que reintentes sin volver a escanear.'
   },
   {
-    image: '/tutorial/paso4.jpg',
+    image: '/tutorial/paso6.png',
     title: 'Retira y sal del local',
     description: 'Lleva tus productos y cruza la compuerta de salida. El sensor de proximidad la abrirá automáticamente.'
   }
@@ -142,7 +140,10 @@ export default function TutorialModal({ open, onClose }) {
           </button>
 
           <div className="tutorial-heading">
-            <h2 id="tutorial-title">TUTORIAL DE AUTOCOBRO</h2>
+            <h2 id="tutorial-title">
+              <span className="tutorial-title-coral">TUTORIAL</span>{' '}
+              <span className="tutorial-title-mint">DE AUTOCOBRO</span>
+            </h2>
             <p>
               PASO {step} DE {TUTORIAL_TOTAL_STEPS}
             </p>

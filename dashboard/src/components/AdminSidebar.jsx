@@ -12,6 +12,7 @@ import {
   Sliders,
   X
 } from 'lucide-react'
+import { getRoleMeta } from '../utils/roles'
 
 // Navigation structure
 const NAV = [
@@ -66,10 +67,11 @@ export default function AdminSidebar({
   collapsed,
   onToggleCollapse
 }) {
+  const roleMeta = getRoleMeta(role)
   const userName =
     session?.user?.user_metadata?.nombre_completo ||
     session?.user?.email?.split('@')[0] ||
-    (role === 'ADMIN' ? 'Gerente General' : 'Administrador')
+    roleMeta.label
 
   const userInitial = userName.charAt(0).toUpperCase()
 
@@ -156,7 +158,7 @@ export default function AdminSidebar({
               <div className="sidebar-user-info">
                 <span className="sidebar-user-name">{userName}</span>
                 <span className="sidebar-user-role">
-                  {realtimeOk ? '● En línea' : '○ Sin realtime'}
+                  {roleMeta.emoji} {roleMeta.label} · {realtimeOk ? '● En línea' : '○ Sin realtime'}
                 </span>
               </div>
             )}

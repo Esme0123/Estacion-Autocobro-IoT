@@ -1,17 +1,14 @@
 import { useState, useEffect, useCallback } from 'react'
 import { BrowserRouter, Routes, Route, Navigate, useNavigate, useLocation } from 'react-router-dom'
-import { supabase, getProductsFromDB, isSupabaseConfigured } from './supabaseClient'
+import { supabase, getProductsFromDB } from './supabaseClient'
 import Navbar from './components/Navbar'
 import AuthScreen from './components/AuthScreen'
 import SelfCheckout from './components/SelfCheckout'
 import AdminSuite from './components/AdminSuite'
+import ManagerStationsView from './components/ManagerStationsView'
 import IoTSimulatorDrawer from './components/IoTSimulatorDrawer'
 import TutorialModal, { TUTORIAL_STORAGE_KEY } from './components/TutorialModal'
-
-// Rol normalizado: el tutorial solo aplica al rol Cliente / Usuario.
-function isClienteRole(value) {
-  return String(value || '').trim().toUpperCase() === 'CLIENTE'
-}
+import { ROLE, normalizeRole, getHomePath } from './utils/roles'
 
 // sessionStorage puede fallar en navegación privada estricta: no debe romper el login.
 function tutorialAlreadyShown() {
@@ -43,6 +40,11 @@ function AppContent({ session, setSession, role, setRole }) {
   const [isSimulatorOpen, setIsSimulatorOpen] = useState(false)
   const [tutorialOpen, setTutorialOpen] = useState(false)
 
+  const currentRole = normalizeRole(role)
+  const isCliente = currentRole === ROLE.CLIENTE
+  const isGerente = currentRole === ROLE.GERENTE
+  const isAdmin = currentRole === ROLE.ADMIN
+
   const reloadProducts = useCallback(async () => {
     const list = await getProductsFromDB()
     setProducts(list)
@@ -72,28 +74,58 @@ function AppContent({ session, setSession, role, setRole }) {
       await supabase.auth.signOut()
     } catch {}
     setSession(null)
-    setRole(null)
+    setRole(ROLE.CLIENTE)
     setTutorialOpen(false)
     resetTutorialFlag()
     localStorage.removeItem('demo_role')
     localStorage.removeItem('demo_session')
-    navigate('/login')
+    navigate('/login', { replace: true })
   }
 
-  // Salvaguarda: el tutorial nunca se muestra a Admin/Gerente ni en el panel admin.
-  useEffect(() => {
-    if (!isClienteRole(role) || location.pathname.startsWith('/admin')) {
-      setTutorialOpen(false)
+  function handleAuth(newSession, newRole) {
+    const normalized = normalizeRole(
+      newRole || newSession?.user?.user_metadata?.rol || ROLE.CLIENTE
+    )
+
+    setSession(newSession)
+    setRole(normalized)
+    localStorage.setItem('demo_session', JSON.stringify(newSession))
+    localStorage.setItem('demo_role', normalized)
+
+    // Tutorial automático SOLO para Cliente, una vez por inicio de sesión.
+    if (normalized === ROLE.CLIENTE && !tutorialAlreadyShown()) {
+      markTutorialAsShown()
+      setTutorialOpen(true)
     }
-  }, [role, location.pathname])
+
+    navigate(getHomePath(normalized), { replace: true })
+  }
+
+  // Salvaguarda: el tutorial nunca se muestra a Admin/Gerente.
+  useEffect(() => {
+    if (!isCliente) setTutorialOpen(false)
+  }, [isCliente])
+
+  // Protección estricta de vistas: cada rol queda confinado a su propia ruta,
+  // aunque el usuario intente cambiar la URL manualmente.
+  useEffect(() => {
+    if (!session || location.pathname === '/login') return
+
+    if (isCliente && location.pathname !== '/cajero') {
+      navigate('/cajero', { replace: true })
+    } else if (isGerente && location.pathname !== '/gerente') {
+      navigate('/gerente', { replace: true })
+    } else if (isAdmin && !location.pathname.startsWith('/admin')) {
+      navigate('/admin', { replace: true })
+    }
+  }, [session, isCliente, isGerente, isAdmin, location.pathname, navigate])
 
   function handleShowTutorial() {
-    if (isClienteRole(role)) setTutorialOpen(true)
+    if (isCliente) setTutorialOpen(true)
   }
 
   // Notificación al emitir una lectura en el simulador
   function handleReadingEmitted() {
-    // Si la lectura afecta el inventario o productos, se recarga
     reloadProducts()
   }
 
@@ -105,10 +137,8 @@ function AppContent({ session, setSession, role, setRole }) {
       {!isLoginPage && !isAdminPage && (
         <Navbar
           session={session}
-          role={role}
+          role={currentRole}
           onLogout={handleLogout}
-          onToggleSimulator={() => setIsSimulatorOpen(!isSimulatorOpen)}
-          isSimulatorOpen={isSimulatorOpen}
           realtimeOk={realtimeOk}
         />
       )}
@@ -118,23 +148,9 @@ function AppContent({ session, setSession, role, setRole }) {
           path="/login"
           element={
             session ? (
-              <Navigate to={role === 'ADMIN' ? '/admin' : '/cajero'} replace />
+              <Navigate to={getHomePath(currentRole)} replace />
             ) : (
-              <AuthScreen
-                onAuth={(newSession, newRole) => {
-                  setSession(newSession)
-                  const r = newRole || newSession?.user?.user_metadata?.rol || 'CLIENTE'
-                  setRole(r)
-                  localStorage.setItem('demo_session', JSON.stringify(newSession))
-                  localStorage.setItem('demo_role', r)
-
-                  // Tutorial automático SOLO para Cliente, una vez por inicio de sesión.
-                  if (isClienteRole(r) && !tutorialAlreadyShown()) {
-                    markTutorialAsShown()
-                    setTutorialOpen(true)
-                  }
-                }}
-              />
+              <AuthScreen onAuth={handleAuth} />
             )
           }
         />
@@ -142,39 +158,64 @@ function AppContent({ session, setSession, role, setRole }) {
         <Route
           path="/cajero"
           element={
-            <SelfCheckout
-              products={products}
-              onStockUpdated={reloadProducts}
-              role={role}
-              onShowTutorial={handleShowTutorial}
-            />
+            !session ? (
+              <Navigate to="/login" replace />
+            ) : !isCliente ? (
+              <Navigate to={getHomePath(currentRole)} replace />
+            ) : (
+              <SelfCheckout
+                products={products}
+                onStockUpdated={reloadProducts}
+                role={currentRole}
+                onShowTutorial={handleShowTutorial}
+              />
+            )
+          }
+        />
+
+        <Route
+          path="/gerente"
+          element={
+            !session ? (
+              <Navigate to="/login" replace />
+            ) : !isGerente ? (
+              <Navigate to={getHomePath(currentRole)} replace />
+            ) : (
+              <ManagerStationsView realtimeOk={realtimeOk} />
+            )
           }
         />
 
         <Route
           path="/admin/*"
           element={
-            <AdminSuite
-              products={products}
-              onProductsChanged={reloadProducts}
-              session={session}
-              role={role}
-              onLogout={handleLogout}
-              onToggleSimulator={() => setIsSimulatorOpen(!isSimulatorOpen)}
-              isSimulatorOpen={isSimulatorOpen}
-              realtimeOk={realtimeOk}
-            />
+            !session ? (
+              <Navigate to="/login" replace />
+            ) : !isAdmin ? (
+              <Navigate to={getHomePath(currentRole)} replace />
+            ) : (
+              <AdminSuite
+                products={products}
+                onProductsChanged={reloadProducts}
+                session={session}
+                role={currentRole}
+                onLogout={handleLogout}
+                onToggleSimulator={() => setIsSimulatorOpen(!isSimulatorOpen)}
+                isSimulatorOpen={isSimulatorOpen}
+                realtimeOk={realtimeOk}
+              />
+            )
           }
         />
 
         {/* Redirección por defecto */}
         <Route
           path="*"
-          element={<Navigate to={session ? (role === 'ADMIN' ? '/admin' : '/cajero') : '/login'} replace />}
+          element={<Navigate to={session ? getHomePath(currentRole) : '/login'} replace />}
         />
       </Routes>
 
-      {/* Tutorial de autocobro (solo Cliente / Cliente que lo reabre manualmente) */}
+      {/* Tutorial de autocobro (solo Cliente, automático o reabierto manualmente) */}
       <TutorialModal open={tutorialOpen} onClose={() => setTutorialOpen(false)} />
 
       {/* Consola Flotante de Simulación IoT ESP32 */}
@@ -190,7 +231,7 @@ function AppContent({ session, setSession, role, setRole }) {
 
 export default function App() {
   const [session, setSession] = useState(null)
-  const [role, setRole] = useState('CLIENTE')
+  const [role, setRole] = useState(ROLE.CLIENTE)
   const [initializing, setInitializing] = useState(true)
 
   useEffect(() => {
@@ -198,7 +239,7 @@ export default function App() {
     supabase.auth.getSession().then(({ data }) => {
       if (data?.session) {
         setSession(data.session)
-        const userRole = data.session?.user?.user_metadata?.rol || 'CLIENTE'
+        const userRole = normalizeRole(data.session?.user?.user_metadata?.rol || ROLE.CLIENTE)
         setRole(userRole)
       } else {
         // Verificar sesión demo previa en localStorage
@@ -207,7 +248,7 @@ export default function App() {
         if (storedDemo) {
           try {
             setSession(JSON.parse(storedDemo))
-            setRole(storedRole || 'CLIENTE')
+            setRole(normalizeRole(storedRole || ROLE.CLIENTE))
           } catch {}
         }
       }
@@ -217,7 +258,7 @@ export default function App() {
     const { data: listener } = supabase.auth.onAuthStateChange((_event, newSession) => {
       if (newSession) {
         setSession(newSession)
-        const userRole = newSession?.user?.user_metadata?.rol || 'CLIENTE'
+        const userRole = normalizeRole(newSession?.user?.user_metadata?.rol || ROLE.CLIENTE)
         setRole(userRole)
       }
     })

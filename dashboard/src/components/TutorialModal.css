@@ -32,6 +32,7 @@
   box-shadow: 0 26px 70px rgba(15, 23, 42, 0.32);
   position: relative;
   outline: none;
+  font-family: 'Fredoka', 'Inter', sans-serif;
   animation: tutorialCardIn 0.28s cubic-bezier(0.16, 1, 0.3, 1);
 }
 
@@ -129,18 +130,35 @@
 
 .tutorial-heading h2 {
   margin: 0;
-  font-family: 'Outfit', 'Inter', sans-serif;
-  font-size: clamp(15px, 2.4vw, 22px);
-  font-weight: 800;
-  letter-spacing: 0.08em;
-  color: var(--ink, #1e293b);
+  font-family: 'Lilita One', 'Fredoka', sans-serif;
+  font-size: clamp(28px, 4vw, 34px);
+  font-weight: 400;
+  line-height: 1.05;
+  letter-spacing: 0.03em;
+  color: #de7272;
+  -webkit-text-stroke: 1.5px #2d2a26;
+  text-shadow: 2px 2px 0 #2d2a26;
+  paint-order: stroke fill;
+}
+
+.tutorial-title-coral {
+  color: #de7272;
+  -webkit-text-stroke: 1.5px #2d2a26;
+  text-shadow: 2px 2px 0 #2d2a26;
+}
+
+.tutorial-title-mint {
+  color: #b4e4d6;
+  -webkit-text-stroke: 1.5px #2d2a26;
+  text-shadow: 2px 2px 0 #2d2a26;
 }
 
 .tutorial-heading p {
-  margin: 4px 0 0;
-  font-size: 11px;
-  font-weight: 800;
-  letter-spacing: 0.18em;
+  margin: 6px 0 0;
+  font-family: 'Fredoka', sans-serif;
+  font-size: 13px;
+  font-weight: 700;
+  letter-spacing: 0.16em;
   color: #1b7a63;
 }
 
@@ -244,20 +262,24 @@
 /* ----------------------------- Pie / CTA ------------------------------ */
 .tutorial-caption {
   margin: 14px 2px 0;
-  font-size: 13px;
-  line-height: 1.55;
+  font-family: 'Fredoka', sans-serif;
+  font-size: 14px;
+  font-weight: 700;
+  line-height: 1.6;
   color: var(--ink-secondary, #475569);
 }
 
 .tutorial-caption strong {
-  color: var(--ink, #1e293b);
+  color: #2d2a26;
+  font-weight: 700;
 }
 
 .tutorial-hint {
   margin: 14px 0 0;
   text-align: center;
-  font-size: 11px;
-  font-weight: 600;
+  font-family: 'Fredoka', sans-serif;
+  font-size: 12px;
+  font-weight: 700;
   color: #94a3b8;
 }
 
@@ -325,12 +347,21 @@
   }
 
   .tutorial-heading h2 {
-    letter-spacing: 0.04em;
+    font-size: 28px;
+    letter-spacing: 0.02em;
+    -webkit-text-stroke: 1.2px #2d2a26;
+    text-shadow: 1.5px 1.5px 0 #2d2a26;
+  }
+
+  .tutorial-title-coral,
+  .tutorial-title-mint {
+    -webkit-text-stroke: 1.2px #2d2a26;
+    text-shadow: 1.5px 1.5px 0 #2d2a26;
   }
 
   .tutorial-heading p {
-    font-size: 10px;
-    letter-spacing: 0.14em;
+    font-size: 11px;
+    letter-spacing: 0.12em;
   }
 
   .tutorial-stepper {

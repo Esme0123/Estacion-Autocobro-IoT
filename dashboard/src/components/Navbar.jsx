@@ -1,20 +1,17 @@
-import { useState } from 'react'
-import { Link, useLocation } from 'react-router-dom'
-import { ShoppingCart, LayoutDashboard, Cpu, LogOut, Radio, User, Sliders } from 'lucide-react'
+import { Link } from 'react-router-dom'
+import { ShoppingCart, Cpu, LogOut } from 'lucide-react'
+import { getRoleMeta } from '../utils/roles'
 
-export default function Navbar({ session, role, onLogout, onToggleSimulator, isSimulatorOpen, realtimeOk }) {
-  const location = useLocation()
-  const isCajero = location.pathname.startsWith('/cajero')
-  const isAdmin = location.pathname.startsWith('/admin')
-
+export default function Navbar({ session, role, onLogout, realtimeOk }) {
+  const roleMeta = getRoleMeta(role)
   const userName =
     session?.user?.user_metadata?.nombre_completo ||
     session?.user?.email?.split('@')[0] ||
-    (role === 'ADMIN' ? 'Gerente General' : 'Cliente Autocobro')
+    roleMeta.label
 
   return (
     <nav className="main-navbar">
-      <Link to="/" className="nav-brand">
+      <Link to={roleMeta.home} className="nav-brand">
         <div className="brand-icon">
           <ShoppingCart size={24} />
         </div>
@@ -24,42 +21,16 @@ export default function Navbar({ session, role, onLogout, onToggleSimulator, isS
         </div>
       </Link>
 
-      <div className="nav-roles">
-        <Link
-          to="/cajero"
-          className={`role-btn ${isCajero ? 'active' : ''}`}
-          title="Flujo Guiado de Compra para el Cliente"
-        >
-          <ShoppingCart size={16} />
-          <span>🛍️ Modo Cajero (Cliente)</span>
-        </Link>
-        <Link
-          to="/admin"
-          className={`role-btn ${isAdmin ? 'active' : ''}`}
-          title="Gestión de Inventario, Ventas y Telemetría IoT"
-        >
-          <LayoutDashboard size={16} />
-          <span>📊 Modo Gerente (Admin)</span>
-        </Link>
-      </div>
-
       <div className="nav-actions">
-        <div className="station-pill" title="Estación IoT conectada al ESP32">
-          <Cpu size={14} />
-          <span>CAJA_IOT_01</span>
-        </div>
-
-        <button
-          type="button"
-          onClick={onToggleSimulator}
-          className={`sim-toggle-btn ${isSimulatorOpen ? 'active' : ''}`}
-          title="Abrir consola de simulación de sensores ESP32"
+        <span
+          className={`role-badge ${roleMeta.badgeClass}`}
+          title={`Rol actual: ${roleMeta.label}${userName ? ` · ${userName}` : ''}`}
         >
-          <Sliders size={14} />
-          <span>🕹️ Simulador IoT</span>
-        </button>
+          <span className="role-badge-emoji">{roleMeta.emoji}</span>
+          <span>{roleMeta.label}</span>
+        </span>
 
-        <div className="user-chip" title={userName}>
+        <div className="station-pill" title="Estación IoT asignada al ESP32">
           <span
             className={`live-dot ${realtimeOk ? '' : 'off'}`}
             style={{
@@ -70,10 +41,8 @@ export default function Navbar({ session, role, onLogout, onToggleSimulator, isS
               display: 'inline-block'
             }}
           />
-          <User size={14} />
-          <span style={{ maxWidth: 120, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-            {userName}
-          </span>
+          <Cpu size={14} />
+          <span>CAJA_IOT_01</span>
         </div>
 
         <button type="button" className="btn-ghost" onClick={onLogout} title="Cerrar Sesión">

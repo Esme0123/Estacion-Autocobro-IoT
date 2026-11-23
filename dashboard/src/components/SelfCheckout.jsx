@@ -21,6 +21,7 @@ import {
   HelpCircle
 } from 'lucide-react'
 import { supabase, recordCompletedPurchase } from '../supabaseClient'
+import { ROLE, normalizeRole } from '../utils/roles'
 
 // Generador de sonidos limpios con Web Audio API para simular el hardware
 function playBeep(freq = 880, type = 'sine', duration = 0.12) {
@@ -45,7 +46,7 @@ export default function SelfCheckout({ products, onStockUpdated, role, onShowTut
   // El tutorial se ofrece en la vista de cajero solo al rol Cliente
   const canShowTutorial =
     typeof onShowTutorial === 'function' &&
-    String(role || '').trim().toUpperCase() === 'CLIENTE'
+    normalizeRole(role) === ROLE.CLIENTE
 
   // Estado del Carrito
   const [cart, setCart] = useState([])
