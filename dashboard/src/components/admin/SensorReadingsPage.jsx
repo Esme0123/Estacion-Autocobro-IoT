@@ -42,6 +42,7 @@ import {
   TIMEZONE,
   DEFAULT_SENSOR_DEVICES,
   getSensorPeriodRange,
+  isReadingInPeriod,
   getSensorHealth,
   calculateWeightStats,
   buildWeightTimelineChart,
@@ -201,16 +202,32 @@ export default function SensorReadingsPage({ readings: initialReadings = [], onR
   // --------------------------------------------------------------------------
   // CARGA DE LECTURAS HISTÓRICAS PARA EL PERÍODO SELECCIONADO
   // --------------------------------------------------------------------------
-  const loadHistoricalData = useCallback(async (periodStart, periodEnd) => {
+  const loadHistoricalData = useCallback(async (period) => {
     try {
-      const res = await supabase
+      let query = supabase
         .from('sensor_readings')
         .select('*')
-        .gte('created_at', periodStart.toISOString())
-        .lt('created_at', periodEnd.toISOString())
         .order('created_at', { ascending: false }) // Newest first
         .limit(1000)
 
+      if (period.preset === 'PERSONALIZADO') {
+        query = query
+          .gte('created_at', period.start.toISOString())
+          .lt('created_at', period.end.toISOString())
+      } else {
+        // Para ventanas móviles continuas (24_HORAS, 7_DIAS, 30_DIAS):
+        // Calcular el inicio relativo a la hora actual para no omitir registros recién llegados
+        const durationMs =
+          period.preset === '30_DIAS'
+            ? 30 * 24 * 3600 * 1000
+            : period.preset === '7_DIAS'
+              ? 7 * 24 * 3600 * 1000
+              : 24 * 3600 * 1000
+        const freshStart = new Date(Date.now() - durationMs)
+        query = query.gte('created_at', freshStart.toISOString())
+      }
+
+      const res = await query
       if (!res.error && res.data) {
         return res.data
       }
@@ -219,13 +236,8 @@ export default function SensorReadingsPage({ readings: initialReadings = [], onR
     // Fallback local
     try {
       const local = JSON.parse(localStorage.getItem('local_readings') || '[]')
-      const pStart = periodStart.getTime()
-      const pEnd = periodEnd.getTime()
       return local
-        .filter((r) => {
-          const t = new Date(r.created_at).getTime()
-          return t >= pStart && t < pEnd
-        })
+        .filter((r) => isReadingInPeriod(r, period))
         .sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime())
     } catch (e) {
       return []
@@ -233,38 +245,59 @@ export default function SensorReadingsPage({ readings: initialReadings = [], onR
   }, [])
 
   // --------------------------------------------------------------------------
-  // DISPATCHER PRINCIPAL DE CARGA
+  // DISPATCHER PRINCIPAL DE CARGA Y ACTUALIZACIÓN MANUAL
   // --------------------------------------------------------------------------
-  const reloadAll = useCallback(async () => {
+  const isRefreshingRef = useRef(false)
+
+  const reloadAll = useCallback(async (isManual = false) => {
+    if (isRefreshingRef.current) return
+    isRefreshingRef.current = true
     setLoading(true)
     setErrorMsg('')
 
     try {
+      // Si fue accionado manualmente y existe callback padre, refrescar padre también
+      if (isManual && onRefresh) {
+        try {
+          await onRefresh()
+        } catch (e) {}
+      }
+
       const devList = await loadDevices()
       setDevices(devList)
 
       const [latestMap, historyList] = await Promise.all([
         loadLatestStates(devList),
-        loadHistoricalData(activePeriod.start, activePeriod.end)
+        loadHistoricalData(activePeriod)
       ])
 
       setLatestReadings(latestMap)
       setHistoricalReadings(historyList)
     } catch (err) {
       console.error('Error cargando lecturas de sensores:', err)
-      setErrorMsg('No se pudieron obtener todas las lecturas del servidor.')
+      setErrorMsg('No se pudieron obtener todas las lecturas del servidor. Se conservan los datos actuales.')
     } finally {
       setLoading(false)
+      isRefreshingRef.current = false
     }
-  }, [loadDevices, loadLatestStates, loadHistoricalData, activePeriod])
+  }, [loadDevices, loadLatestStates, loadHistoricalData, activePeriod, onRefresh])
 
   useEffect(() => {
-    reloadAll()
+    reloadAll(false)
   }, [reloadAll])
 
   // --------------------------------------------------------------------------
   // 3. SUSCRIPCIÓN EN TIEMPO REAL (SUPABASE REALTIME)
+  // - Mantiene suscripción persistente sin desconectar al alternar filtros
+  // - activePeriodRef garantiza que el callback evalúe siempre el período actual
   // --------------------------------------------------------------------------
+  const [realtimeConnected, setRealtimeConnected] = useState(false)
+  const activePeriodRef = useRef(activePeriod)
+
+  useEffect(() => {
+    activePeriodRef.current = activePeriod
+  }, [activePeriod])
+
   useEffect(() => {
     const channel = supabase
       .channel('sensor-readings-page-feed')
@@ -272,8 +305,11 @@ export default function SensorReadingsPage({ readings: initialReadings = [], onR
         const newReading = payload.new
         if (!newReading) return
 
-        // 1. Actualizar inmediatamente el último estado del sensor correspondiente
-        const type = newReading.sensor_type
+        // 1. Normalizar tipo de sensor ('weight' -> 'hx711')
+        const rawType = (newReading.sensor_type || '').toLowerCase().trim()
+        const type = rawType === 'weight' ? 'hx711' : rawType
+
+        // 2. Actualizar inmediatamente el último estado del sensor correspondiente
         if (type) {
           setLatestReadings((prev) => ({
             ...prev,
@@ -281,24 +317,50 @@ export default function SensorReadingsPage({ readings: initialReadings = [], onR
           }))
         }
 
-        // 2. Si la nueva lectura cae dentro del período histórico actual, integrarla al inicio (newest first)
-        const t = new Date(newReading.created_at).getTime()
-        if (t >= activePeriod.start.getTime() && t < activePeriod.end.getTime()) {
-          setHistoricalReadings((prev) => [newReading, ...prev.filter((r) => r.id !== newReading.id)])
+        // 3. Si la nueva lectura cae dentro del período histórico actual, integrarla al inicio (newest first)
+        if (isReadingInPeriod(newReading, activePeriodRef.current)) {
+          setHistoricalReadings((prev) => {
+            const filtered = prev.filter((r) => r.id !== newReading.id)
+            return [newReading, ...filtered]
+          })
         }
       })
-      .subscribe()
+      .subscribe((status) => {
+        if (status === 'SUBSCRIBED') {
+          setRealtimeConnected(true)
+        } else if (status === 'CHANNEL_ERROR' || status === 'TIMED_OUT' || status === 'CLOSED') {
+          setRealtimeConnected(false)
+        }
+      })
 
     return () => {
       supabase.removeChannel(channel)
     }
-  }, [activePeriod])
+  }, [])
+
+  // Polling de respaldo cada 25 segundos SOLO si Realtime se desconectó
+  useEffect(() => {
+    if (realtimeConnected) return
+    const interval = setInterval(() => {
+      reloadAll(false)
+    }, 25000)
+    return () => clearInterval(interval)
+  }, [realtimeConnected, reloadAll])
 
   // --------------------------------------------------------------------------
-  // AGRUPACIÓN DE LECTURAS HISTÓRICAS POR DISPOSITIVO/TIPO
+  // AGRUPACIÓN OPTIMIZADA DE LECTURAS HISTÓRICAS POR DISPOSITIVO/TIPO
+  // Mantiene referencias estables para los sensores no afectados, evitando
+  // recalcular gráficos de secciones que no recibieron datos nuevos.
   // --------------------------------------------------------------------------
-  const readingsBySensor = useMemo(() => {
-    const map = {
+  const [readingsBySensor, setReadingsBySensor] = useState({
+    hx711: [],
+    proximidad: [],
+    magnetico: [],
+    rc522: []
+  })
+
+  useEffect(() => {
+    const nextMap = {
       hx711: [],
       proximidad: [],
       magnetico: [],
@@ -308,17 +370,30 @@ export default function SensorReadingsPage({ readings: initialReadings = [], onR
     historicalReadings.forEach((r) => {
       const type = (r.sensor_type || '').toLowerCase()
       if (type === 'hx711' || type === 'weight') {
-        map.hx711.push(r)
+        nextMap.hx711.push(r)
       } else if (type === 'proximidad') {
-        map.proximidad.push(r)
+        nextMap.proximidad.push(r)
       } else if (type === 'magnetico') {
-        map.magnetico.push(r)
+        nextMap.magnetico.push(r)
       } else if (type === 'rc522') {
-        map.rc522.push(r)
+        nextMap.rc522.push(r)
       }
     })
 
-    return map
+    setReadingsBySensor((prev) => {
+      const isArraySame = (a, b) => {
+        if (a.length !== b.length) return false
+        if (a.length === 0) return true
+        return a[0].id === b[0].id && a[a.length - 1].id === b[b.length - 1].id
+      }
+
+      return {
+        hx711: isArraySame(nextMap.hx711, prev.hx711) ? prev.hx711 : nextMap.hx711,
+        proximidad: isArraySame(nextMap.proximidad, prev.proximidad) ? prev.proximidad : nextMap.proximidad,
+        magnetico: isArraySame(nextMap.magnetico, prev.magnetico) ? prev.magnetico : nextMap.magnetico,
+        rc522: isArraySame(nextMap.rc522, prev.rc522) ? prev.rc522 : nextMap.rc522
+      }
+    })
   }, [historicalReadings])
 
   // --------------------------------------------------------------------------
@@ -338,6 +413,13 @@ export default function SensorReadingsPage({ readings: initialReadings = [], onR
   const totalTablePages = useMemo(() => {
     return Math.ceil(filteredTableReadings.length / ITEMS_PER_PAGE) || 1
   }, [filteredTableReadings])
+
+  // Ajustar página si el total de páginas se reduce tras filtros o actualizaciones
+  useEffect(() => {
+    if (tablePage > totalTablePages && totalTablePages > 0) {
+      setTablePage(totalTablePages)
+    }
+  }, [tablePage, totalTablePages])
 
   const pagedTableReadings = useMemo(() => {
     const startIndex = (tablePage - 1) * ITEMS_PER_PAGE
@@ -491,13 +573,13 @@ export default function SensorReadingsPage({ readings: initialReadings = [], onR
             <button
               type="button"
               className="btn-ghost"
-              onClick={reloadAll}
-              disabled={loading}
+              onClick={() => reloadAll(true)}
+              disabled={loading || loadingReadings}
               title="Refrescar telemetría en tiempo real"
               style={{ fontSize: 12, padding: '7px 12px' }}
             >
-              <RefreshCw size={13} className={loading ? 'spin-icon' : ''} />
-              <span>{loading ? 'Cargando...' : 'Actualizar'}</span>
+              <RefreshCw size={13} className={loading || loadingReadings ? 'spin-icon' : ''} />
+              <span>{loading || loadingReadings ? 'Actualizando...' : 'Actualizar'}</span>
             </button>
           </div>
 

@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo, useCallback } from 'react'
+import { useState, useEffect, useMemo, useCallback, useRef } from 'react'
 import {
   DollarSign,
   Receipt,
@@ -63,41 +63,102 @@ export default function VentasPage({
   const [purchasesList, setPurchasesList] = useState(initialPurchases)
   const [loading, setLoading] = useState(false)
   const [errorMsg, setErrorMsg] = useState('')
+  const [realtimeConnected, setRealtimeConnected] = useState(true)
 
-  // Carga local de compras completas
-  const loadPurchases = useCallback(async () => {
-    setLoading(true)
-    setErrorMsg('')
+  // Estado del modal de detalle de compra
+  const [selectedPurchase, setSelectedPurchase] = useState(null)
+  const [loadingItems, setLoadingItems] = useState(false)
+  const [detailItems, setDetailItems] = useState([])
+
+  // Ref mutable para que los listeners en tiempo real accedan a la compra abierta sin recrear suscripciones
+  const selectedPurchaseRef = useRef(selectedPurchase)
+  useEffect(() => {
+    selectedPurchaseRef.current = selectedPurchase
+  }, [selectedPurchase])
+
+  // Guardias de concurrencia y temporizadores para debounce
+  const isRefreshingRef = useRef(false)
+  const debounceTimerRef = useRef(null)
+
+  // Recarga silenciosa o con spinner de ítems de compra cuando cambian en tiempo real
+  const reloadDetailItems = useCallback(async (purchaseId) => {
+    if (!purchaseId) return
+    try {
+      const { data, error } = await supabase
+        .from('purchase_items')
+        .select('*')
+        .eq('purchase_id', purchaseId)
+
+      if (!error && data) {
+        setDetailItems(data)
+        setSelectedPurchase((prev) =>
+          prev && prev.id === purchaseId ? { ...prev, purchase_items: data } : prev
+        )
+      }
+    } catch (e) {}
+  }, [])
+
+  // Carga principal de compras desde Supabase
+  const loadPurchases = useCallback(async (isManual = false) => {
+    if (isRefreshingRef.current) return
+    isRefreshingRef.current = true
+    if (isManual) {
+      setLoading(true)
+      setErrorMsg('')
+    }
     try {
       const data = await getPurchasesFromDB(150)
       if (data && data.length > 0) {
         setPurchasesList(data)
+        // Mantener sincronizada la compra seleccionada si el modal está abierto
+        if (selectedPurchaseRef.current) {
+          const matching = data.find((p) => p.id === selectedPurchaseRef.current.id)
+          if (matching) {
+            setSelectedPurchase((prev) =>
+              prev && prev.id === matching.id ? { ...prev, ...matching } : prev
+            )
+            if (matching.purchase_items && matching.purchase_items.length > 0) {
+              setDetailItems(matching.purchase_items)
+            }
+          }
+        }
       } else if (initialPurchases && initialPurchases.length > 0) {
         setPurchasesList(initialPurchases)
       }
     } catch (err) {
       console.warn('Error cargando historial de ventas:', err)
+      if (isManual) {
+        setErrorMsg('No se pudieron recuperar las compras registradas.')
+      }
       if (initialPurchases && initialPurchases.length > 0) {
         setPurchasesList(initialPurchases)
       } else {
         try {
           const local = JSON.parse(localStorage.getItem('local_purchases') || '[]')
           setPurchasesList(local)
-        } catch (e) {
-          setErrorMsg('No se pudieron recuperar las compras registradas.')
-        }
+        } catch (e) {}
       }
     } finally {
-      setLoading(false)
+      if (isManual) setLoading(false)
+      isRefreshingRef.current = false
     }
   }, [initialPurchases])
+
+  // Desencadenador con debounce para evitar múltiples consultas simultáneas por inserciones en ráfaga
+  const triggerDebouncedReload = useCallback(() => {
+    if (debounceTimerRef.current) {
+      clearTimeout(debounceTimerRef.current)
+    }
+    debounceTimerRef.current = setTimeout(() => {
+      loadPurchases(false)
+    }, 200)
+  }, [loadPurchases])
 
   // Sincronizar si las props iniciales cambian
   useEffect(() => {
     if (initialPurchases && initialPurchases.length > 0) {
-      setPurchasesList(prev => {
+      setPurchasesList((prev) => {
         if (!prev || prev.length === 0) return initialPurchases
-        // Mantener la versión más rica o actualizada
         return prev
       })
     }
@@ -108,20 +169,96 @@ export default function VentasPage({
     loadPurchases()
   }, [loadPurchases])
 
-  // Suscripción Realtime en Supabase
+  const handleCloseDetail = useCallback(() => {
+    setSelectedPurchase(null)
+    setDetailItems([])
+  }, [])
+
+  // Suscripción Multiplexada Realtime en Supabase (purchases + purchase_items)
   useEffect(() => {
     const channel = supabase
-      .channel('ventas-page-realtime')
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'purchases' }, () => {
-        loadPurchases()
-        if (parentOnRefresh) parentOnRefresh()
+      .channel('admin-ventas-realtime-feed')
+      // 1. Escuchar compras (INSERT, UPDATE y DELETE)
+      .on(
+        'postgres_changes',
+        { event: '*', schema: 'public', table: 'purchases' },
+        (payload) => {
+          if (payload.eventType === 'INSERT') {
+            const newPur = payload.new
+            if (newPur) {
+              setPurchasesList((prev) => {
+                if (prev.some((p) => p.id === newPur.id)) {
+                  return prev.map((p) => (p.id === newPur.id ? { ...p, ...newPur } : p))
+                }
+                return [newPur, ...prev]
+              })
+            }
+          } else if (payload.eventType === 'UPDATE') {
+            const updated = payload.new
+            if (updated) {
+              setPurchasesList((prev) =>
+                prev.map((p) =>
+                  p.id === updated.id
+                    ? { ...p, ...updated, purchase_items: p.purchase_items || updated.purchase_items }
+                    : p
+                )
+              )
+              // Si la compra abierta en el modal fue modificada, actualizarla inmediatamente
+              if (selectedPurchaseRef.current?.id === updated.id) {
+                setSelectedPurchase((prev) =>
+                  prev && prev.id === updated.id ? { ...prev, ...updated } : prev
+                )
+              }
+            }
+          } else if (payload.eventType === 'DELETE') {
+            const deletedId = payload.old?.id
+            if (deletedId) {
+              setPurchasesList((prev) => prev.filter((p) => p.id !== deletedId))
+              if (selectedPurchaseRef.current?.id === deletedId) {
+                handleCloseDetail()
+              }
+            }
+          }
+          triggerDebouncedReload()
+        }
+      )
+      // 2. Escuchar ítems de compra (INSERT, UPDATE y DELETE)
+      .on(
+        'postgres_changes',
+        { event: '*', schema: 'public', table: 'purchase_items' },
+        (payload) => {
+          const purchaseId = payload.new?.purchase_id || payload.old?.purchase_id
+          // Si el modal está abierto para esta compra, actualizar los ítems mostrados al instante
+          if (purchaseId && selectedPurchaseRef.current?.id === purchaseId) {
+            reloadDetailItems(purchaseId)
+          }
+          triggerDebouncedReload()
+        }
+      )
+      .subscribe((status) => {
+        if (status === 'SUBSCRIBED') {
+          setRealtimeConnected(true)
+        } else if (status === 'CHANNEL_ERROR' || status === 'TIMED_OUT' || status === 'CLOSED') {
+          setRealtimeConnected(false)
+        }
       })
-      .subscribe()
 
     return () => {
+      if (debounceTimerRef.current) {
+        clearTimeout(debounceTimerRef.current)
+      }
       supabase.removeChannel(channel)
     }
-  }, [loadPurchases, parentOnRefresh])
+  }, [triggerDebouncedReload, reloadDetailItems, handleCloseDetail])
+
+  // Polling de respaldo cada 25 segundos SOLO si Realtime se desconecta
+  useEffect(() => {
+    if (realtimeConnected) return
+    const interval = setInterval(() => {
+      loadPurchases(false)
+    }, 25000)
+    return () => clearInterval(interval)
+  }, [realtimeConnected, loadPurchases])
 
   // -------------------------------------------------------------
   // 3. FILTROS DE TABLA (ESTADO, BÚSQUEDA Y PAGINACIÓN)
@@ -177,14 +314,22 @@ export default function VentasPage({
   // - Ingresos: Suma de purchases.total de pagadas (excluyendo canceladas)
   // - Ventas realizadas: Conteo de pagadas (excluyendo canceladas)
   // - Ticket promedio: Ingresos pagados / Conteo de ventas pagadas
+  // - Compras pendientes y en proceso: conteo según estado
   const summaryKpis = useMemo(() => {
     let revenue = 0
     let paidCount = 0
+    let pendingCount = 0
+    let inProgressCount = 0
 
     periodPurchases.forEach((p) => {
+      const st = String(p.status || '').toLowerCase().trim()
       if (isPaidPurchase(p)) {
         revenue += parseFloat(p.total) || 0
         paidCount += 1
+      } else if (st === 'pendiente' || st === 'pending') {
+        pendingCount += 1
+      } else if (st === 'en proceso' || st === 'in_progress' || st === 'iniciada' || st === 'started') {
+        inProgressCount += 1
       }
     })
 
@@ -193,7 +338,9 @@ export default function VentasPage({
     return {
       revenue,
       paidCount,
-      averageTicket
+      averageTicket,
+      pendingCount,
+      inProgressCount
     }
   }, [periodPurchases])
 
@@ -246,20 +393,15 @@ export default function VentasPage({
   }, [sortedPurchases, currentPage, itemsPerPage])
 
   // -------------------------------------------------------------
-  // 6. MODAL DE DETALLE DE COMPRA
+  // 6. APERTURA Y GESTIÓN DE MODAL DE DETALLE DE COMPRA
   // -------------------------------------------------------------
-  const [selectedPurchase, setSelectedPurchase] = useState(null)
-  const [loadingItems, setLoadingItems] = useState(false)
-  const [detailItems, setDetailItems] = useState([])
-
   const handleOpenDetail = useCallback(async (purchase) => {
     setSelectedPurchase(purchase)
     if (purchase.purchase_items && purchase.purchase_items.length > 0) {
       setDetailItems(purchase.purchase_items)
-      return
     }
 
-    // Si no vinieron los items anidados, intentar consultarlos directamente
+    // Consultar la versión más fresca de los ítems en Supabase
     setLoadingItems(true)
     try {
       const { data, error } = await supabase
@@ -269,19 +411,19 @@ export default function VentasPage({
 
       if (!error && data && data.length > 0) {
         setDetailItems(data)
-      } else {
+        setSelectedPurchase((prev) =>
+          prev && prev.id === purchase.id ? { ...prev, purchase_items: data } : prev
+        )
+      } else if (!purchase.purchase_items || purchase.purchase_items.length === 0) {
         setDetailItems([])
       }
     } catch (e) {
-      setDetailItems([])
+      if (!purchase.purchase_items || purchase.purchase_items.length === 0) {
+        setDetailItems([])
+      }
     } finally {
       setLoadingItems(false)
     }
-  }, [])
-
-  const handleCloseDetail = useCallback(() => {
-    setSelectedPurchase(null)
-    setDetailItems([])
   }, [])
 
   // Cerrar modal con tecla Escape
@@ -303,7 +445,7 @@ export default function VentasPage({
       <div className="resumen-top-bar" style={{ marginBottom: 20 }}>
         <div className="resumen-title-group">
           <h1>Gestión de Ventas</h1>
-          <p>Supervisa compras, inspecciona transacciones y consulta el desglose de artículos vendidos.</p>
+          <p>Supervisa compras, revisa transacciones y consulta artículos vendidos.</p>
         </div>
 
         <div className="resumen-actions-group">
@@ -357,7 +499,10 @@ export default function VentasPage({
               type="button"
               className="btn-ghost"
               onClick={() => {
-                loadPurchases()
+                loadPurchases(true)
+                if (selectedPurchaseRef.current) {
+                  reloadDetailItems(selectedPurchaseRef.current.id)
+                }
                 if (parentOnRefresh) parentOnRefresh()
               }}
               disabled={isLoadingTotal}
@@ -445,6 +590,14 @@ export default function VentasPage({
             <div style={{ fontSize: 12, color: 'var(--muted)', marginTop: 4 }}>
               Excluye canceladas y compras pendientes
             </div>
+            {(summaryKpis.pendingCount > 0 || summaryKpis.inProgressCount > 0) && (
+              <div style={{ fontSize: 11, fontWeight: 600, color: 'var(--muted)', marginTop: 2 }}>
+                ⏱ {[
+                  summaryKpis.pendingCount > 0 ? `${summaryKpis.pendingCount} pendiente${summaryKpis.pendingCount === 1 ? '' : 's'}` : null,
+                  summaryKpis.inProgressCount > 0 ? `${summaryKpis.inProgressCount} en proceso` : null
+                ].filter(Boolean).join(' • ')}
+              </div>
+            )}
           </div>
         </div>
 

@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo, useCallback } from 'react'
+import { useState, useEffect, useMemo, useCallback, useRef } from 'react'
 import { Link } from 'react-router-dom'
 import {
   DollarSign,
@@ -98,6 +98,10 @@ export default function AdminResumen({
   const [productsCatalog, setProductsCatalog] = useState(initialProducts)
   const [periodPurchases, setPeriodPurchases] = useState(initialPurchases)
   const [recentTransactions, setRecentTransactions] = useState([])
+  const [realtimeConnected, setRealtimeConnected] = useState(true)
+
+  // Guardias de concurrencia y sincronización
+  const isRefreshingRef = useRef(false)
 
   // Estado IoT
   const [iotDevices, setIotDevices] = useState([
@@ -117,37 +121,45 @@ export default function AdminResumen({
     )
   }, [datePreset, appliedCustomStart, appliedCustomEnd])
 
+  // Ref mutable para que los suscriptores Realtime siempre consulten el rango vigente
+  const activeRangeRef = useRef(activeRange)
+  useEffect(() => {
+    activeRangeRef.current = activeRange
+  }, [activeRange])
+
   // -------------------------------------------------------------
   // CARGA DE DATOS DE VENTAS (SUPABASE + FALLBACK)
   // -------------------------------------------------------------
   const loadSalesData = useCallback(async (precedingStart, currentEnd) => {
     let sales = null
 
-    // 1. Intento principal con filtro en finished_at
+    // Buscamos compras con un margen anterior para incluir compras iniciadas
+    // antes de precedingStart pero finalizadas dentro del período, así como compras en curso.
+    const queryBufferStart = new Date(precedingStart.getTime() - 24 * 3600 * 1000)
+
     try {
       const res = await supabase
         .from('purchases')
-        .select('id, total, status, started_at, finished_at, purchase_items(id, product_id, product_name, quantity, subtotal)')
-        .gte('finished_at', precedingStart.toISOString())
-        .lt('finished_at', currentEnd.toISOString())
+        .select('id, total, status, started_at, finished_at, customer_id, purchase_items(id, product_id, product_name, quantity, subtotal)')
+        .gte('started_at', queryBufferStart.toISOString())
+        .lt('started_at', currentEnd.toISOString())
         .order('started_at', { ascending: false })
 
       if (!res.error && res.data) {
         sales = res.data
       }
     } catch (e) {
-      // Ignorar e intentar con started_at
+      // Ignorar e intentar consulta abierta
     }
 
-    // 2. Si finished_at no existe en esquema o falla, usar started_at
+    // Si falló el filtro de started_at, intentar consulta general ordenada
     if (!sales) {
       try {
         const res = await supabase
           .from('purchases')
-          .select('id, total, status, started_at, finished_at, purchase_items(id, product_id, product_name, quantity, subtotal)')
-          .gte('started_at', precedingStart.toISOString())
-          .lt('started_at', currentEnd.toISOString())
+          .select('id, total, status, started_at, finished_at, customer_id, purchase_items(id, product_id, product_name, quantity, subtotal)')
           .order('started_at', { ascending: false })
+          .limit(1000)
 
         if (!res.error && res.data) {
           sales = res.data
@@ -155,7 +167,7 @@ export default function AdminResumen({
       } catch (e) {}
     }
 
-    // 3. Fallback a compras locales si Supabase no está configurado o falla
+    // Fallback a compras locales si Supabase no está configurado o falla
     if (!sales || sales.length === 0) {
       try {
         const local = JSON.parse(localStorage.getItem('local_purchases') || '[]')
@@ -173,19 +185,11 @@ export default function AdminResumen({
   // -------------------------------------------------------------
   const loadRecentPurchases = useCallback(async () => {
     try {
-      let res = await supabase
+      const res = await supabase
         .from('purchases')
-        .select('id, total, status, started_at, finished_at')
+        .select('id, total, status, started_at, finished_at, customer_id')
         .order('started_at', { ascending: false })
         .limit(5)
-
-      if (res.error) {
-        res = await supabase
-          .from('purchases')
-          .select('id, total, status, started_at, finished_at')
-          .order('started_at', { ascending: false })
-          .limit(5)
-      }
 
       if (!res.error && res.data && res.data.length > 0) {
         return res.data
@@ -288,15 +292,43 @@ export default function AdminResumen({
   }, [])
 
   // -------------------------------------------------------------
-  // FUNCIÓN PRINCIPAL DE CARGA
+  // ACTUALIZACIONES SELECTIVAS / DIRIGIDAS (SIN RELOAD COMPLETO)
   // -------------------------------------------------------------
-  const reloadDashboardData = useCallback(async () => {
+  const reloadSales = useCallback(async () => {
+    try {
+      const range = activeRangeRef.current
+      const sales = await loadSalesData(range.precedingStart, range.currentEnd)
+      setPeriodPurchases(sales)
+    } catch (e) {}
+  }, [loadSalesData])
+
+  const reloadRecent = useCallback(async () => {
+    try {
+      const recent = await loadRecentPurchases()
+      setRecentTransactions(recent)
+    } catch (e) {}
+  }, [loadRecentPurchases])
+
+  const reloadProductsCatalog = useCallback(async () => {
+    try {
+      const prods = await loadProducts()
+      setProductsCatalog(prods)
+    } catch (e) {}
+  }, [loadProducts])
+
+  // -------------------------------------------------------------
+  // FUNCIÓN PRINCIPAL DE CARGA Y MANUAL REFRESH
+  // -------------------------------------------------------------
+  const reloadDashboardData = useCallback(async (isManual = false) => {
+    if (isRefreshingRef.current) return
+    isRefreshingRef.current = true
     setLoading(true)
     setErrorMsg('')
 
     try {
+      const range = activeRangeRef.current
       const [salesData, recentList, prodsList, iotData] = await Promise.all([
-        loadSalesData(activeRange.precedingStart, activeRange.currentEnd),
+        loadSalesData(range.precedingStart, range.currentEnd),
         loadRecentPurchases(),
         loadProducts(),
         loadIoTStatus()
@@ -312,54 +344,84 @@ export default function AdminResumen({
       setErrorMsg('No se pudieron sincronizar todos los datos en tiempo real.')
     } finally {
       setLoading(false)
+      isRefreshingRef.current = false
     }
-  }, [activeRange, loadSalesData, loadRecentPurchases, loadProducts, loadIoTStatus])
+  }, [loadSalesData, loadRecentPurchases, loadProducts, loadIoTStatus])
 
   // Carga inicial y al cambiar rango de fechas
   useEffect(() => {
     reloadDashboardData()
-  }, [reloadDashboardData])
+  }, [activeRange, reloadDashboardData])
 
   // -------------------------------------------------------------
-  // SUSCRIPCIONES EN TIEMPO REAL (SUPABASE REALTIME)
+  // SUSCRIPCIÓN MULTIPLEXADA EN TIEMPO REAL (SUPABASE REALTIME)
   // -------------------------------------------------------------
   useEffect(() => {
-    // 1. Nuevas compras o cambios de estado
-    const channelPurchases = supabase
-      .channel('resumen-purchases-realtime')
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'purchases' }, () => {
-        reloadDashboardData()
-      })
-      .subscribe()
-
-    // 2. Nuevas lecturas de sensores ESP32
-    const channelSensors = supabase
-      .channel('resumen-sensors-realtime')
-      .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'sensor_readings' }, (payload) => {
-        const newReading = payload.new
-        if (newReading?.sensor_type) {
-          setLatestReadingsBySensor((prev) => ({
-            ...prev,
-            [newReading.sensor_type]: newReading
-          }))
+    const channel = supabase
+      .channel('admin-resumen-realtime-feed')
+      // 1. Cambios en compras (INSERT, UPDATE de estado pagada/cancelada, DELETE)
+      .on(
+        'postgres_changes',
+        { event: '*', schema: 'public', table: 'purchases' },
+        () => {
+          reloadSales()
+          reloadRecent()
+        }
+      )
+      // 2. Cambios en ítems de compras (afectan ranking de productos y totales de venta)
+      .on(
+        'postgres_changes',
+        { event: '*', schema: 'public', table: 'purchase_items' },
+        () => {
+          reloadSales()
+        }
+      )
+      // 3. Cambios en catálogo de productos (afectan conteo activo/inactivo y nombres de ranking)
+      .on(
+        'postgres_changes',
+        { event: '*', schema: 'public', table: 'products' },
+        () => {
+          reloadProductsCatalog()
+        }
+      )
+      // 4. Nuevas lecturas de sensores ESP32 (actualización instantánea de tarjetas IoT)
+      .on(
+        'postgres_changes',
+        { event: 'INSERT', schema: 'public', table: 'sensor_readings' },
+        (payload) => {
+          const newReading = payload.new
+          if (!newReading) return
+          const rawType = (newReading.sensor_type || '').toLowerCase().trim()
+          const type = rawType === 'weight' ? 'hx711' : rawType
+          if (type) {
+            setLatestReadingsBySensor((prev) => ({
+              ...prev,
+              [type]: newReading
+            }))
+          }
+        }
+      )
+      .subscribe((status) => {
+        if (status === 'SUBSCRIBED') {
+          setRealtimeConnected(true)
+        } else if (status === 'CHANNEL_ERROR' || status === 'TIMED_OUT' || status === 'CLOSED') {
+          setRealtimeConnected(false)
         }
       })
-      .subscribe()
-
-    // 3. Cambios en catálogo de productos
-    const channelProducts = supabase
-      .channel('resumen-products-realtime')
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'products' }, () => {
-        loadProducts().then(setProductsCatalog)
-      })
-      .subscribe()
 
     return () => {
-      supabase.removeChannel(channelPurchases)
-      supabase.removeChannel(channelSensors)
-      supabase.removeChannel(channelProducts)
+      supabase.removeChannel(channel)
     }
-  }, [reloadDashboardData, loadProducts])
+  }, [reloadSales, reloadRecent, reloadProductsCatalog])
+
+  // Polling de respaldo cada 30 segundos SOLO si Realtime se desconectó
+  useEffect(() => {
+    if (realtimeConnected) return
+    const interval = setInterval(() => {
+      reloadDashboardData(false)
+    }, 30000)
+    return () => clearInterval(interval)
+  }, [realtimeConnected, reloadDashboardData])
 
   // -------------------------------------------------------------
   // CÁLCULOS DE KPIS Y GRÁFICOS
@@ -499,7 +561,7 @@ export default function AdminResumen({
             <button
               type="button"
               className="btn-ghost"
-              onClick={reloadDashboardData}
+              onClick={() => reloadDashboardData(true)}
               disabled={loading}
               title="Refrescar datos en vivo"
               style={{ fontSize: 12, padding: '7px 12px' }}
@@ -589,6 +651,11 @@ export default function AdminResumen({
               {kpis.currentCount}{' '}
               <small style={{ fontSize: 14, fontWeight: 600, color: 'var(--muted)' }}>ventas</small>
             </div>
+            {kpis.inProgressCount > 0 && (
+              <div style={{ fontSize: 11, fontWeight: 600, color: 'var(--muted)', marginTop: 2 }}>
+                ⏱ {kpis.inProgressCount} en proceso
+              </div>
+            )}
             <div className="kpi-stat-trend">
               <span className={`trend-badge ${kpis.countChange.dir}`}>
                 {kpis.countChange.dir === 'up' && <TrendingUp size={12} />}

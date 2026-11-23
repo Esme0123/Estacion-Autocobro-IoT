@@ -223,19 +223,39 @@ export function calculateSalesKPIs(purchases, currentStart, currentEnd, precedin
   let precedingRevenue = 0
   let precedingCount = 0
 
-  purchases.forEach((p) => {
-    if (!isPaidPurchase(p)) return
-    const finishedDate = getPurchaseFinishedDate(p)
-    if (!finishedDate) return
-    const t = finishedDate.getTime()
-    const total = parseFloat(p.total) || 0
+  let inProgressCount = 0
+  let precedingInProgressCount = 0
 
-    if (t >= cStart && t < cEnd) {
-      currentRevenue += total
-      currentCount += 1
-    } else if (t >= pStart && t < pEnd) {
-      precedingRevenue += total
-      precedingCount += 1
+  purchases.forEach((p) => {
+    const isPaid = isPaidPurchase(p)
+    const st = String(p.status || '').toLowerCase().trim()
+    const isCancelled = st === 'cancelled' || st === 'cancelada'
+
+    if (isPaid) {
+      const finishedDate = getPurchaseFinishedDate(p)
+      if (finishedDate) {
+        const t = finishedDate.getTime()
+        const total = parseFloat(p.total) || 0
+
+        if (t >= cStart && t < cEnd) {
+          currentRevenue += total
+          currentCount += 1
+        } else if (t >= pStart && t < pEnd) {
+          precedingRevenue += total
+          precedingCount += 1
+        }
+      }
+    } else if (!isCancelled) {
+      // Compra en curso / pendiente: filtrar por started_at
+      const startedDate = getPurchaseStartedDate(p)
+      if (startedDate) {
+        const t = startedDate.getTime()
+        if (t >= cStart && t < cEnd) {
+          inProgressCount += 1
+        } else if (t >= pStart && t < pEnd) {
+          precedingInProgressCount += 1
+        }
+      }
     }
   })
 
@@ -249,6 +269,8 @@ export function calculateSalesKPIs(purchases, currentStart, currentEnd, precedin
     precedingRevenue,
     precedingCount,
     precedingAverage,
+    inProgressCount,
+    precedingInProgressCount,
     revenueChange: calcPercentageChange(currentRevenue, precedingRevenue),
     countChange: calcPercentageChange(currentCount, precedingCount),
     averageChange: calcPercentageChange(currentAverage, precedingAverage)
