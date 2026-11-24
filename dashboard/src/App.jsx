@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback } from 'react'
 import { BrowserRouter, Routes, Route, Navigate, useNavigate, useLocation } from 'react-router-dom'
-import { supabase, getProductsFromDB } from './supabaseClient'
+import { supabase, getProductsFromDB, getUserProfileRole } from './supabaseClient'
 import Navbar from './components/Navbar'
 import AuthScreen from './components/AuthScreen'
 import SelfCheckout from './components/SelfCheckout'
@@ -8,7 +8,7 @@ import AdminSuite from './components/AdminSuite'
 import ManagerStationsView from './components/ManagerStationsView'
 import IoTSimulatorDrawer from './components/IoTSimulatorDrawer'
 import TutorialModal, { TUTORIAL_STORAGE_KEY } from './components/TutorialModal'
-import { ROLE, normalizeRole, getHomePath } from './utils/roles'
+import { ROLE, normalizeRole, getHomePath, isDemoSession } from './utils/roles'
 
 // sessionStorage puede fallar en navegación privada estricta: no debe romper el login.
 function tutorialAlreadyShown() {
@@ -83,14 +83,18 @@ function AppContent({ session, setSession, role, setRole }) {
   }
 
   function handleAuth(newSession, newRole) {
-    const normalized = normalizeRole(
-      newRole || newSession?.user?.user_metadata?.rol || ROLE.CLIENTE
-    )
+    const isDemo = isDemoSession(newSession)
+    const normalized = normalizeRole(newRole || ROLE.CLIENTE)
 
     setSession(newSession)
     setRole(normalized)
-    localStorage.setItem('demo_session', JSON.stringify(newSession))
-    localStorage.setItem('demo_role', normalized)
+    if (isDemo) {
+      localStorage.setItem('demo_session', JSON.stringify(newSession))
+      localStorage.setItem('demo_role', normalized)
+    } else {
+      localStorage.removeItem('demo_session')
+      localStorage.removeItem('demo_role')
+    }
 
     // Tutorial automático SOLO para Cliente, una vez por inicio de sesión.
     if (normalized === ROLE.CLIENTE && !tutorialAlreadyShown()) {
@@ -236,11 +240,27 @@ export default function App() {
 
   useEffect(() => {
     // 1. Verificar sesión persistente en Supabase Auth
-    supabase.auth.getSession().then(({ data }) => {
+    supabase.auth.getSession().then(async ({ data }) => {
       if (data?.session) {
-        setSession(data.session)
-        const userRole = normalizeRole(data.session?.user?.user_metadata?.rol || ROLE.CLIENTE)
-        setRole(userRole)
+        if (isDemoSession(data.session)) {
+          const storedRole = localStorage.getItem('demo_role')
+          setSession(data.session)
+          setRole(normalizeRole(storedRole || ROLE.CLIENTE))
+        } else {
+          // Sesión real Supabase: consultar public.profiles
+          const profileRole = await getUserProfileRole(data.session.user.id)
+          if (profileRole) {
+            setSession(data.session)
+            setRole(normalizeRole(profileRole))
+          } else {
+            console.warn('No se pudo recuperar el perfil del usuario desde public.profiles. Cerrando sesión.')
+            try { await supabase.auth.signOut() } catch {}
+            setSession(null)
+            setRole(ROLE.CLIENTE)
+            localStorage.removeItem('demo_role')
+            localStorage.removeItem('demo_session')
+          }
+        }
       } else {
         // Verificar sesión demo previa en localStorage
         const storedDemo = localStorage.getItem('demo_session')
@@ -255,11 +275,25 @@ export default function App() {
       setInitializing(false)
     })
 
-    const { data: listener } = supabase.auth.onAuthStateChange((_event, newSession) => {
+    const { data: listener } = supabase.auth.onAuthStateChange(async (_event, newSession) => {
       if (newSession) {
-        setSession(newSession)
-        const userRole = normalizeRole(newSession?.user?.user_metadata?.rol || ROLE.CLIENTE)
-        setRole(userRole)
+        if (isDemoSession(newSession)) {
+          setSession(newSession)
+          const storedRole = localStorage.getItem('demo_role')
+          setRole(normalizeRole(storedRole || ROLE.CLIENTE))
+        } else {
+          const profileRole = await getUserProfileRole(newSession.user.id)
+          if (profileRole) {
+            setSession(newSession)
+            setRole(normalizeRole(profileRole))
+          } else {
+            setSession(null)
+            setRole(ROLE.CLIENTE)
+          }
+        }
+      } else {
+        setSession(null)
+        setRole(ROLE.CLIENTE)
       }
     })
 

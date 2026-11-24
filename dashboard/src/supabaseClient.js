@@ -339,3 +339,33 @@ export async function insertSensorReading({ sensor_type, numeric_value, rfid_uid
 
   return reading
 }
+
+
+// -------------------------------------------------------------
+// SERVICIOS DE AUTENTICACIÓN Y PERFILES DE USUARIO
+// -------------------------------------------------------------
+export async function getUserProfileRole(userId) {
+  if (!userId) return null
+  try {
+    const { data, error } = await supabase
+      .from('profiles')
+      .select('role')
+      .eq('id', userId)
+      .maybeSingle()
+
+    if (error) {
+      console.warn('Error al consultar perfil en Supabase:', error.message)
+      return null
+    }
+
+    if (!data?.role) {
+      console.warn('No se encontró el rol para el usuario:', userId)
+      return null
+    }
+
+    return data.role
+  } catch (err) {
+    console.warn('Excepción al consultar perfil en Supabase:', err)
+    return null
+  }
+}

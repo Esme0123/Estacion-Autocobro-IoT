@@ -158,7 +158,7 @@ export default function AdminSidebar({
               <div className="sidebar-user-info">
                 <span className="sidebar-user-name">{userName}</span>
                 <span className="sidebar-user-role">
-                  {roleMeta.emoji} {roleMeta.label} · {realtimeOk ? '● En línea' : '○ Sin realtime'}
+                  {roleMeta.label}
                 </span>
               </div>
             )}

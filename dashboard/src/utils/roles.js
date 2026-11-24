@@ -45,3 +45,12 @@ export function getRoleMeta(value) {
 export function getHomePath(value) {
   return getRoleMeta(value).home
 }
+
+export function isDemoSession(session) {
+  const userId = session?.user?.id
+  const token = session?.access_token
+  return Boolean(
+    (typeof userId === 'string' && userId.startsWith('demo-')) ||
+    (typeof token === 'string' && token.startsWith('demo-token-'))
+  )
+}

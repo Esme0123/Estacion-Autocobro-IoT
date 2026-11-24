@@ -1,7 +1,7 @@
 import { useState } from 'react'
-import { BarChart3, ShoppingCart, LogIn, UserPlus, Shield, AlertCircle } from 'lucide-react'
+import { BarChart3, ShoppingCart, LogIn, UserPlus, Shield, AlertCircle, Eye, EyeOff } from 'lucide-react'
 import { useNavigate } from 'react-router-dom'
-import { supabase, isSupabaseConfigured } from '../supabaseClient'
+import { supabase, isSupabaseConfigured, getUserProfileRole } from '../supabaseClient'
 import { ROLE, normalizeRole, getHomePath } from '../utils/roles'
 
 const DEMO_USERS = {
@@ -16,6 +16,10 @@ export default function AuthScreen({ onAuth }) {
   const [nombre, setNombre] = useState('')
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
+  const [confirmPassword, setConfirmPassword] = useState('')
+  const [showLoginPassword, setShowLoginPassword] = useState(false)
+  const [showRegPassword, setShowRegPassword] = useState(false)
+  const [showConfirmPassword, setShowConfirmPassword] = useState(false)
   const [rol, setRol] = useState(ROLE.CLIENTE)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
@@ -57,14 +61,31 @@ export default function AuthScreen({ onAuth }) {
         password
       })
 
-      setLoading(false)
-
       if (error) {
+        setLoading(false)
         setError('Error al iniciar sesión: ' + error.message)
         return
       }
 
-      const userRole = normalizeRole(data.session?.user?.user_metadata?.rol || ROLE.CLIENTE)
+      if (!data?.session) {
+        setLoading(false)
+        setError('No se pudo establecer una sesión válida.')
+        return
+      }
+
+      // Obtener el rol autoritativo desde public.profiles
+      const profileRole = await getUserProfileRole(data.session.user.id)
+
+      setLoading(false)
+
+      if (!profileRole) {
+        // Si no se pudo obtener el rol de profiles, no otorgar acceso
+        await supabase.auth.signOut()
+        setError('No se pudo recuperar el perfil del usuario desde la base de datos. Verifique sus permisos.')
+        return
+      }
+
+      const userRole = normalizeRole(profileRole)
       onAuth?.(data.session, userRole)
       navigate(getHomePath(userRole), { replace: true })
     } catch (err) {
@@ -76,6 +97,12 @@ export default function AuthScreen({ onAuth }) {
   async function handleRegister(e) {
     e.preventDefault()
     limpiarMensajes()
+
+    if (password !== confirmPassword) {
+      setError('Las contraseñas no coinciden. Por favor, verifica e inténtalo de nuevo.')
+      return
+    }
+
     setLoading(true)
 
     try {
@@ -97,10 +124,20 @@ export default function AuthScreen({ onAuth }) {
       if (!data.session) {
         setOk('¡Cuenta creada exitosamente! Revisa tu bandeja para confirmar el correo o ingresa con los botones de demo rápida.')
         setTab('login')
+        setConfirmPassword('')
         return
       }
 
-      const normalized = normalizeRole(rol)
+      // Si existe sesión inmediata, consultar rol desde public.profiles
+      const profileRole = await getUserProfileRole(data.session.user.id)
+      if (!profileRole) {
+        setOk('¡Cuenta creada exitosamente! Por favor inicia sesión con tus credenciales.')
+        setTab('login')
+        setConfirmPassword('')
+        return
+      }
+
+      const normalized = normalizeRole(profileRole)
       onAuth?.(data.session, normalized)
       navigate(getHomePath(normalized), { replace: true })
     } catch (err) {
@@ -181,6 +218,7 @@ export default function AuthScreen({ onAuth }) {
             onClick={() => {
               setTab('login')
               limpiarMensajes()
+              setConfirmPassword('')
             }}
           >
             Iniciar Sesión
@@ -191,6 +229,7 @@ export default function AuthScreen({ onAuth }) {
             onClick={() => {
               setTab('register')
               limpiarMensajes()
+              setConfirmPassword('')
             }}
           >
             Crear Cuenta
@@ -243,19 +282,87 @@ export default function AuthScreen({ onAuth }) {
             />
           </div>
 
-          <div className="field">
-            <label htmlFor="password">Contraseña</label>
-            <input
-              id="password"
-              type="password"
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
-              placeholder="••••••••"
-              autoComplete={tab === 'login' ? 'current-password' : 'new-password'}
-              minLength={6}
-              required
-            />
-          </div>
+          {tab === 'login' ? (
+            <div className="field">
+              <label htmlFor="password">Contraseña</label>
+              <div className="password-input-wrapper">
+                <input
+                  id="password"
+                  type={showLoginPassword ? 'text' : 'password'}
+                  value={password}
+                  onChange={(e) => setPassword(e.target.value)}
+                  placeholder="••••••••"
+                  autoComplete="current-password"
+                  minLength={6}
+                  required
+                />
+                <button
+                  type="button"
+                  className="password-toggle-btn"
+                  onClick={() => setShowLoginPassword(!showLoginPassword)}
+                  aria-label={showLoginPassword ? 'Ocultar contraseña' : 'Ver contraseña'}
+                  title={showLoginPassword ? 'Ocultar contraseña' : 'Ver contraseña'}
+                  tabIndex={-1}
+                >
+                  {showLoginPassword ? <EyeOff size={18} /> : <Eye size={18} />}
+                </button>
+              </div>
+            </div>
+          ) : (
+            <>
+              <div className="field">
+                <label htmlFor="password">Contraseña</label>
+                <div className="password-input-wrapper">
+                  <input
+                    id="password"
+                    type={showRegPassword ? 'text' : 'password'}
+                    value={password}
+                    onChange={(e) => setPassword(e.target.value)}
+                    placeholder="••••••••"
+                    autoComplete="new-password"
+                    minLength={6}
+                    required
+                  />
+                  <button
+                    type="button"
+                    className="password-toggle-btn"
+                    onClick={() => setShowRegPassword(!showRegPassword)}
+                    aria-label={showRegPassword ? 'Ocultar contraseña' : 'Ver contraseña'}
+                    title={showRegPassword ? 'Ocultar contraseña' : 'Ver contraseña'}
+                    tabIndex={-1}
+                  >
+                    {showRegPassword ? <EyeOff size={18} /> : <Eye size={18} />}
+                  </button>
+                </div>
+              </div>
+
+              <div className="field">
+                <label htmlFor="confirmPassword">Confirmar contraseña</label>
+                <div className="password-input-wrapper">
+                  <input
+                    id="confirmPassword"
+                    type={showConfirmPassword ? 'text' : 'password'}
+                    value={confirmPassword}
+                    onChange={(e) => setConfirmPassword(e.target.value)}
+                    placeholder="••••••••"
+                    autoComplete="new-password"
+                    minLength={6}
+                    required
+                  />
+                  <button
+                    type="button"
+                    className="password-toggle-btn"
+                    onClick={() => setShowConfirmPassword(!showConfirmPassword)}
+                    aria-label={showConfirmPassword ? 'Ocultar confirmación de contraseña' : 'Ver confirmación de contraseña'}
+                    title={showConfirmPassword ? 'Ocultar confirmación de contraseña' : 'Ver confirmación de contraseña'}
+                    tabIndex={-1}
+                  >
+                    {showConfirmPassword ? <EyeOff size={18} /> : <Eye size={18} />}
+                  </button>
+                </div>
+              </div>
+            </>
+          )}
 
           <button className="btn-primary" type="submit" disabled={loading}>
             {loading ? (
