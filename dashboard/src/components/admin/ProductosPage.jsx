@@ -19,8 +19,11 @@ import {
   ShoppingBag,
   Clock,
   Layers,
-  ArrowUpDown
+  ArrowUpDown,
+  Minus
 } from 'lucide-react'
+import GlassIcon from '../GlassIcon'
+import TiltGlare from '../TiltGlare'
 import {
   supabase,
   saveProductToDB,
@@ -517,65 +520,65 @@ export default function ProductosPage({
       </div>
 
       {/* =========================================================
-          2. TARJETAS DE RESUMEN DE PRODUCTOS (3 TARJETAS)
+          2. TARJETAS DE RESUMEN DE PRODUCTOS CON TILT + GLARE
          ========================================================= */}
       <div className="resumen-kpis-grid" style={{ marginBottom: 24 }}>
         {/* KPI 1: Productos registrados */}
-        <div className="kpi-stat-card ingresos">
-          <div className="kpi-stat-header">
-            <h3>Productos registrados</h3>
-            <div className="kpi-stat-icon-wrapper">
-              <Package size={20} />
+        <TiltGlare maxTilt={5}>
+          <div className="kpi-stat-card ingresos">
+            <div className="kpi-stat-header">
+              <h3>Productos registrados</h3>
+              <GlassIcon icon={Package} color="sunny" size={44} />
+            </div>
+            <div className="kpi-stat-body">
+              <div className="kpi-stat-value">
+                {summaryCounts.total}{' '}
+                <small style={{ fontSize: 14, fontWeight: 700, color: 'var(--muted)' }}>ítems</small>
+              </div>
+              <div style={{ fontSize: 12, color: '#8c7374', marginTop: 4 }}>
+                Total de productos en la base de datos
+              </div>
             </div>
           </div>
-          <div className="kpi-stat-body">
-            <div className="kpi-stat-value">
-              {summaryCounts.total}{' '}
-              <small style={{ fontSize: 14, fontWeight: 600, color: 'var(--muted)' }}>ítems</small>
-            </div>
-            <div style={{ fontSize: 12, color: 'var(--muted)', marginTop: 4 }}>
-              Total de productos en la base de datos
-            </div>
-          </div>
-        </div>
+        </TiltGlare>
 
         {/* KPI 2: Productos activos */}
-        <div className="kpi-stat-card ventas">
-          <div className="kpi-stat-header">
-            <h3>Productos activos</h3>
-            <div className="kpi-stat-icon-wrapper">
-              <CheckCircle size={20} color="var(--mint-dark)" />
+        <TiltGlare maxTilt={5}>
+          <div className="kpi-stat-card ventas">
+            <div className="kpi-stat-header">
+              <h3>Productos activos</h3>
+              <GlassIcon icon={CheckCircle} color="mint" size={44} />
+            </div>
+            <div className="kpi-stat-body">
+              <div className="kpi-stat-value" style={{ color: '#136350' }}>
+                {summaryCounts.active}{' '}
+                <small style={{ fontSize: 14, fontWeight: 700, color: 'var(--muted)' }}>disponibles</small>
+              </div>
+              <div style={{ fontSize: 12, color: '#8c7374', marginTop: 4 }}>
+                Habilitados para autocobro en la estación IoT
+              </div>
             </div>
           </div>
-          <div className="kpi-stat-body">
-            <div className="kpi-stat-value" style={{ color: 'var(--mint-dark)' }}>
-              {summaryCounts.active}{' '}
-              <small style={{ fontSize: 14, fontWeight: 600, color: 'var(--muted)' }}>disponibles</small>
-            </div>
-            <div style={{ fontSize: 12, color: 'var(--muted)', marginTop: 4 }}>
-              Habilitados para autocobro en la estación IoT
-            </div>
-          </div>
-        </div>
+        </TiltGlare>
 
         {/* KPI 3: Productos inactivos */}
-        <div className="kpi-stat-card ticket">
-          <div className="kpi-stat-header">
-            <h3>Productos inactivos</h3>
-            <div className="kpi-stat-icon-wrapper">
-              <XCircle size={20} color="var(--muted)" />
+        <TiltGlare maxTilt={5}>
+          <div className="kpi-stat-card ticket">
+            <div className="kpi-stat-header">
+              <h3>Productos inactivos</h3>
+              <GlassIcon icon={Minus} color="coral" size={44} />
+            </div>
+            <div className="kpi-stat-body">
+              <div className="kpi-stat-value" style={{ color: '#8a3333' }}>
+                {summaryCounts.inactive}{' '}
+                <small style={{ fontSize: 14, fontWeight: 700, color: 'var(--muted)' }}>deshabilitados</small>
+              </div>
+              <div style={{ fontSize: 12, color: '#8c7374', marginTop: 4 }}>
+                Fuera de línea o pausados temporalmente
+              </div>
             </div>
           </div>
-          <div className="kpi-stat-body">
-            <div className="kpi-stat-value" style={{ color: 'var(--ink-secondary)' }}>
-              {summaryCounts.inactive}{' '}
-              <small style={{ fontSize: 14, fontWeight: 600, color: 'var(--muted)' }}>deshabilitados</small>
-            </div>
-            <div style={{ fontSize: 12, color: 'var(--muted)', marginTop: 4 }}>
-              Fuera de línea o pausados temporalmente
-            </div>
-          </div>
-        </div>
+        </TiltGlare>
       </div>
 
       {/* =========================================================
@@ -632,54 +635,70 @@ export default function ProductosPage({
               </div>
             ) : (
               <div style={{ display: 'flex', flexDirection: 'column', gap: 8, maxHeight: 280, overflowY: 'auto' }}>
-                {rankedProducts.slice(0, 5).map((p, index) => {
-                  const badgeClass =
-                    index === 0 ? 'top-1' : index === 1 ? 'top-2' : index === 2 ? 'top-3' : ''
-                  return (
-                    <div
-                      key={p.id}
-                      className="product-ranking-row"
-                      onClick={() => setSelectedProductForDetail(p)}
-                      style={{ cursor: 'pointer' }}
-                      title="Clic para ver detalle del producto"
-                    >
-                      <div style={{ display: 'flex', alignItems: 'center', gap: 10, minWidth: 0 }}>
-                        <div className={`product-ranking-badge ${badgeClass}`}>#{index + 1}</div>
-                        <span style={{ fontSize: 20 }}>{p.image_url || '📦'}</span>
-                        <div style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                          <div style={{ fontWeight: 700, fontSize: 13, color: 'var(--ink)', textOverflow: 'ellipsis', overflow: 'hidden' }}>
-                            {p.name}
-                          </div>
-                          <div style={{ fontSize: 11, color: 'var(--muted)' }}>
-                            Código: {p.barcode || 'N/A'}
+                {(() => {
+                  const topSlice = rankedProducts.slice(0, 5)
+                  const maxVal = Math.max(
+                    1,
+                    ...topSlice.map(p => (rankingMode === 'units' ? p.periodUnits : p.periodRevenue))
+                  )
+                  return topSlice.map((p, index) => {
+                    const badgeClass =
+                      index === 0 ? 'top-1' : index === 1 ? 'top-2' : index === 2 ? 'top-3' : ''
+                    const curVal = rankingMode === 'units' ? p.periodUnits : p.periodRevenue
+                    const pct = Math.min(100, Math.max(8, Math.round((curVal / maxVal) * 100)))
+
+                    return (
+                      <div
+                        key={p.id}
+                        className="product-ranking-row"
+                        onClick={() => setSelectedProductForDetail(p)}
+                        style={{ cursor: 'pointer', position: 'relative' }}
+                        title="Clic para ver detalle del producto"
+                      >
+                        <div
+                          className="product-ranking-progress-bar"
+                          style={{ width: `${pct}%` }}
+                          aria-hidden="true"
+                        />
+
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 10, minWidth: 0, position: 'relative', zIndex: 1 }}>
+                          <div className={`product-ranking-badge ${badgeClass}`}>#{index + 1}</div>
+                          <span style={{ fontSize: 20 }}>{p.image_url || '📦'}</span>
+                          <div style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                            <div style={{ fontWeight: 800, fontSize: 13, color: '#3b2829', textOverflow: 'ellipsis', overflow: 'hidden' }}>
+                              {p.name}
+                            </div>
+                            <div style={{ fontSize: 11, color: '#8c7374' }}>
+                              Código: {p.barcode || 'N/A'}
+                            </div>
                           </div>
                         </div>
-                      </div>
 
-                      <div style={{ textAlign: 'right', flexShrink: 0 }}>
-                        {rankingMode === 'units' ? (
-                          <>
-                            <strong style={{ display: 'block', color: 'var(--ink)', fontSize: 13 }}>
-                              {p.periodUnits} uds
-                            </strong>
-                            <small style={{ color: 'var(--muted)', fontSize: 11 }}>
-                              {formatBs(p.periodRevenue)}
-                            </small>
-                          </>
-                        ) : (
-                          <>
-                            <strong style={{ display: 'block', color: 'var(--coral-dark)', fontSize: 13 }}>
-                              {formatBs(p.periodRevenue)}
-                            </strong>
-                            <small style={{ color: 'var(--muted)', fontSize: 11 }}>
-                              {p.periodUnits} uds vendidas
-                            </small>
-                          </>
-                        )}
+                        <div style={{ textAlign: 'right', flexShrink: 0, position: 'relative', zIndex: 1 }}>
+                          {rankingMode === 'units' ? (
+                            <>
+                              <strong style={{ display: 'block', color: '#3b2829', fontSize: 13, fontWeight: 800 }}>
+                                {p.periodUnits} uds
+                              </strong>
+                              <small style={{ color: '#8c7374', fontSize: 11, fontWeight: 600 }}>
+                                {formatBs(p.periodRevenue)}
+                              </small>
+                            </>
+                          ) : (
+                            <>
+                              <strong style={{ display: 'block', color: 'var(--coral-dark)', fontSize: 13, fontWeight: 800 }}>
+                                {formatBs(p.periodRevenue)}
+                              </strong>
+                              <small style={{ color: '#8c7374', fontSize: 11, fontWeight: 600 }}>
+                                {p.periodUnits} uds vendidas
+                              </small>
+                            </>
+                          )}
+                        </div>
                       </div>
-                    </div>
-                  )
-                })}
+                    )
+                  })
+                })()}
               </div>
             )}
           </div>

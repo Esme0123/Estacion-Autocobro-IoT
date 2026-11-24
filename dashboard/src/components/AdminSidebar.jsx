@@ -13,6 +13,7 @@ import {
   X
 } from 'lucide-react'
 import { getRoleMeta } from '../utils/roles'
+import GlassIcon from './GlassIcon'
 
 // Navigation structure
 const NAV = [
@@ -98,13 +99,11 @@ export default function AdminSidebar({
         {/* Logo / App Name */}
         <div className="sidebar-header">
           <div className="sidebar-logo">
-            <div className="sidebar-logo-icon">
-              <ShoppingCart size={20} />
-            </div>
+            <GlassIcon icon={ShoppingCart} color="peach" size={42} />
             {!collapsed && (
               <div className="sidebar-logo-text">
                 <span className="sidebar-app-name">Autocobro IoT</span>
-                <span className="sidebar-app-sub">UCB · Panel Admin</span>
+                <span className="sidebar-app-sub">UCB · PANEL ADMIN</span>
               </div>
             )}
           </div>
@@ -153,7 +152,10 @@ export default function AdminSidebar({
             className="sidebar-user"
             title={collapsed ? userName : undefined}
           >
-            <div className="sidebar-avatar">{userInitial}</div>
+            <div className="sidebar-avatar-wrap">
+              <div className="sidebar-avatar">{userInitial}</div>
+              <span className={`sidebar-avatar-dot${realtimeOk ? ' ok' : ''}`} />
+            </div>
             {!collapsed && (
               <div className="sidebar-user-info">
                 <span className="sidebar-user-name">{userName}</span>

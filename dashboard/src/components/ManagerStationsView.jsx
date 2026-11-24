@@ -17,6 +17,9 @@ import {
 } from 'lucide-react'
 import { supabase, getSensorReadingsFromDB } from '../supabaseClient'
 import { formatExactDateTimeLaPaz, getRelativeTime } from '../utils/sensorAnalytics'
+import SplitFlapText from './SplitFlapText'
+import GlassIcon from './GlassIcon'
+import TiltGlare from './TiltGlare'
 import './ManagerStationsView.css'
 
 const STATION_ID = 'CAJA_IOT_01'
@@ -272,25 +275,39 @@ export default function ManagerStationsView({ realtimeOk }) {
   }
 
   return (
-    <div className="manager-view">
+    <div className="manager-screen">
+      <div className="manager-view">
       <header className="manager-header">
-        <div>
-          <span className="manager-eyebrow">🛡️ Gerente de Cajas · Supervisión operativa</span>
-          <h1>Supervisión de Cajas en Vivo</h1>
-          <p>
-            Monitoreo de estaciones de autocobro, básculas HX711, tags RFID y sensores de salida.
-            Sin acceso a reportes financieros ni métricas ejecutivas de ventas.
-          </p>
+        <div className="manager-hero">
+          <GlassIcon color="mint" size="lg" icon={ShieldCheck} label="Supervisión de cajas" />
+          <div className="manager-hero-copy">
+            <span className="manager-eyebrow">Gerente de Cajas · Supervisión operativa</span>
+            <h1>Supervisión de Cajas en Vivo</h1>
+            <p>
+              Monitoreo de estaciones de autocobro, básculas HX711, tags RFID y sensores de salida.
+              Sin acceso a reportes financieros ni métricas ejecutivas de ventas.
+            </p>
+          </div>
         </div>
 
         <div className="manager-header-actions">
           <div className="manager-summary-pills">
-            <span className="manager-summary-pill free">{summary.free} libres</span>
-            <span className="manager-summary-pill busy">{summary.busy} activas</span>
-            <span className="manager-summary-pill alert">{summary.alerts} alertas</span>
+            <span className="manager-summary-pill free">
+              <span className="summary-dot" />
+              {summary.free} libres
+            </span>
+            <span className="manager-summary-pill busy">
+              <span className="summary-dot" />
+              {summary.busy} activas
+            </span>
+            <span className="manager-summary-pill alert">
+              <span className="summary-dot" />
+              {summary.alerts} alertas
+            </span>
           </div>
 
           <span className={`manager-realtime ${realtimeConnected || realtimeOk ? 'on' : 'off'}`}>
+            <span className="realtime-dot" />
             {realtimeConnected || realtimeOk ? <Wifi size={14} /> : <WifiOff size={14} />}
             {realtimeConnected || realtimeOk ? 'Tiempo real' : 'Polling'}
           </span>
@@ -319,14 +336,19 @@ export default function ManagerStationsView({ realtimeOk }) {
         {stations.map((station) => {
           const statusMeta = STATUS_META[station.status] || STATUS_META.libre
           const isAlert = station.status === 'alerta'
+          const tone = isAlert ? 'coral' : station.status === 'libre' ? 'mint' : 'peach'
+          const glassColor = tone
 
           return (
-            <article key={station.id} className={`station-card status-${statusMeta.className}`}>
+            <TiltGlare
+              as="article"
+              key={station.id}
+              className={`station-card status-${statusMeta.className} tone-${tone}`}
+              maxTilt={6}
+            >
               <header className="station-card-header">
                 <div className="station-title">
-                  <div className="station-icon">
-                    <Cpu size={20} />
-                  </div>
+                  <GlassIcon color={glassColor} size="md" icon={Cpu} label={`Estación ${station.id}`} />
                   <div>
                     <h2>{station.id}</h2>
                     <p>{station.name}</p>
@@ -339,13 +361,23 @@ export default function ManagerStationsView({ realtimeOk }) {
               </header>
 
               <div className="station-metrics">
-                <div className="station-metric">
+                <div className="station-metric metric-flap">
                   <span>Peso en báscula</span>
-                  <strong className={isAlert ? 'alert-value' : ''}>{station.weight.toFixed(1)} g</strong>
+                  <SplitFlapText
+                    text={`${station.weight.toFixed(1)} G`}
+                    size="sm"
+                    variant="mint"
+                    ariaLabel={`Peso en báscula: ${station.weight.toFixed(1)} gramos`}
+                  />
                 </div>
-                <div className="station-metric">
+                <div className="station-metric metric-flap">
                   <span>Último tag RFID</span>
-                  <strong className="tag-value">{station.lastTag || 'Sin lecturas'}</strong>
+                  <SplitFlapText
+                    text={station.lastTag || 'SIN TAG'}
+                    size="sm"
+                    variant="sunny"
+                    ariaLabel={`Último tag RFID: ${station.lastTag || 'sin tag'}`}
+                  />
                 </div>
                 <div className="station-metric">
                   <span>Presencia / Puerta</span>
@@ -366,6 +398,7 @@ export default function ManagerStationsView({ realtimeOk }) {
                   const sensorState = station.sensors[type] || 'sin_datos'
                   return (
                     <span key={type} className={`sensor-chip ${sensorState}`} title={`${meta.name}: ${sensorStatusLabel(sensorState)}`}>
+                      <span className="sensor-dot" />
                       <Icon size={13} />
                       <span>{meta.label}</span>
                       <small>{sensorStatusLabel(sensorState)}</small>
@@ -387,7 +420,7 @@ export default function ManagerStationsView({ realtimeOk }) {
                 </button>
                 <button
                   type="button"
-                  className="station-action"
+                  className="station-action tare"
                   onClick={() => handleTare(station.id)}
                   title="Tarar la báscula HX711 remotamente"
                 >
@@ -396,7 +429,7 @@ export default function ManagerStationsView({ realtimeOk }) {
                 </button>
                 <button
                   type="button"
-                  className="station-action"
+                  className="station-action restart"
                   onClick={() => handleRestart(station.id)}
                   title="Reiniciar la estación y sus sensores"
                 >
@@ -413,21 +446,24 @@ export default function ManagerStationsView({ realtimeOk }) {
                   <span>Simular Alerta</span>
                 </button>
               </div>
-            </article>
+            </TiltGlare>
           )
         })}
       </section>
 
       <section className="manager-feed" aria-label="Feed técnico de sensores">
         <div className="manager-feed-header">
-          <div>
-            <h2>Lecturas de Sensores · Feed Técnico</h2>
-            <p>
-              Últimas transmisiones de los sensores físicos de la estación.
-              {latestReadings.hx711 && (
-                <> Peso actual: <strong>{parseFloat(latestReadings.hx711.numeric_value ?? 0).toFixed(1)} g</strong>.</>
-              )}
-            </p>
+          <div className="manager-feed-title">
+            <GlassIcon color="coral" size="md" icon={Activity} label="Feed técnico de sensores" />
+            <div>
+              <h2>Lecturas de Sensores · Feed Técnico</h2>
+              <p>
+                Últimas transmisiones de los sensores físicos de la estación.
+                {latestReadings.hx711 && (
+                  <> Peso actual: <strong>{parseFloat(latestReadings.hx711.numeric_value ?? 0).toFixed(1)} g</strong>.</>
+                )}
+              </p>
+            </div>
           </div>
           <div className="manager-feed-actions">
             <span className="manager-feed-count">{readings.length} eventos</span>
@@ -474,6 +510,7 @@ export default function ManagerStationsView({ realtimeOk }) {
                       </td>
                       <td>
                         <span className={`feed-sensor ${type || 'unknown'}`}>
+                          <span className="feed-sensor-dot" />
                           {meta ? meta.name : reading.sensor_type || 'Sensor'}
                         </span>
                       </td>
@@ -487,6 +524,7 @@ export default function ManagerStationsView({ realtimeOk }) {
           </table>
         </div>
       </section>
+      </div>
     </div>
   )
 }

@@ -1,0 +1,52 @@
+.tilt-glare {
+  --rx: 0deg;
+  --ry: 0deg;
+  --mx: 50%;
+  --my: 50%;
+  --lift: 0px;
+  position: relative;
+  transform: perspective(900px) translateY(var(--lift)) rotateX(var(--rx)) rotateY(var(--ry));
+  transform-style: preserve-3d;
+  transition: transform 0.18s ease-out, box-shadow 0.2s ease;
+}
+
+.tilt-glare:hover {
+  --lift: -2px;
+}
+
+.tilt-glare-light {
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  border-radius: inherit;
+  background: radial-gradient(
+    circle at var(--mx) var(--my),
+    rgba(255, 255, 255, 0.7) 0%,
+    rgba(255, 255, 255, 0.16) 22%,
+    transparent 56%
+  );
+  mix-blend-mode: screen;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.2s ease;
+}
+
+.tilt-glare:hover .tilt-glare-light {
+  opacity: 0.85;
+}
+
+.tilt-glare > :not(.tilt-glare-light) {
+  position: relative;
+  z-index: 1;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .tilt-glare {
+    transform: none;
+    transition: none;
+  }
+
+  .tilt-glare-light {
+    display: none;
+  }
+}

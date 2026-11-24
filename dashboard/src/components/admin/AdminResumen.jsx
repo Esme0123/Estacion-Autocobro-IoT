@@ -12,6 +12,7 @@ import {
   Scale,
   Activity,
   DoorClosed,
+  DoorOpen,
   Radio,
   Package,
   ArrowRight,
@@ -23,6 +24,9 @@ import {
   SlidersHorizontal,
   ChevronRight
 } from 'lucide-react'
+import GlassIcon from '../GlassIcon'
+import SplitFlapText from '../SplitFlapText'
+import TiltGlare from '../TiltGlare'
 import {
   Chart as ChartJS,
   LineElement,
@@ -452,11 +456,12 @@ export default function AdminResumen({
           label: 'Ingresos Pagados (Bs.)',
           data: raw.revenueData,
           borderColor: '#de7272',
-          backgroundColor: 'rgba(255, 202, 136, 0.28)',
+          backgroundColor: 'rgba(222, 114, 114, 0.22)',
           fill: true,
-          tension: 0.32,
+          tension: 0.35,
           pointBackgroundColor: '#de7272',
           pointBorderColor: '#ffffff',
+          pointBorderWidth: 2.5,
           pointRadius: raw.labels.length > 20 ? 3 : 5,
           borderWidth: 2.5
         }
@@ -611,88 +616,88 @@ export default function AdminResumen({
       )}
 
       {/* =========================================================
-          2. SALES KPIS (3 TARJETAS COMPACTAS)
+          2. SALES KPIS (3 TARJETAS COMPACTAS CON TILT + GLARE)
          ========================================================= */}
       <div className="resumen-kpis-grid">
         {/* KPI 1: Ingresos */}
-        <div className="kpi-stat-card ingresos">
-          <div className="kpi-stat-header">
-            <h3>Ingresos</h3>
-            <div className="kpi-stat-icon-wrapper">
-              <DollarSign size={20} />
+        <TiltGlare maxTilt={5}>
+          <div className="kpi-stat-card ingresos">
+            <div className="kpi-stat-header">
+              <h3>Ingresos</h3>
+              <GlassIcon icon={DollarSign} color="sunny" size={44} />
+            </div>
+            <div className="kpi-stat-body">
+              <div className="kpi-stat-value">{formatBs(kpis.currentRevenue)}</div>
+              <div className="kpi-stat-trend">
+                <span className={`trend-badge ${kpis.revenueChange.dir}`}>
+                  {kpis.revenueChange.dir === 'up' && <TrendingUp size={12} />}
+                  {kpis.revenueChange.dir === 'down' && <TrendingDown size={12} />}
+                  {kpis.revenueChange.dir === 'neutral' && <Minus size={12} />}
+                  {kpis.revenueChange.text}
+                </span>
+                <span className="trend-reference">
+                  vs. anterior ({formatBs(kpis.precedingRevenue)})
+                </span>
+              </div>
             </div>
           </div>
-          <div className="kpi-stat-body">
-            <div className="kpi-stat-value">{formatBs(kpis.currentRevenue)}</div>
-            <div className="kpi-stat-trend">
-              <span className={`trend-badge ${kpis.revenueChange.dir}`}>
-                {kpis.revenueChange.dir === 'up' && <TrendingUp size={12} />}
-                {kpis.revenueChange.dir === 'down' && <TrendingDown size={12} />}
-                {kpis.revenueChange.dir === 'neutral' && <Minus size={12} />}
-                {kpis.revenueChange.text}
-              </span>
-              <span className="trend-reference">
-                vs. anterior ({formatBs(kpis.precedingRevenue)})
-              </span>
-            </div>
-          </div>
-        </div>
+        </TiltGlare>
 
         {/* KPI 2: Ventas realizadas */}
-        <div className="kpi-stat-card ventas">
-          <div className="kpi-stat-header">
-            <h3>Ventas realizadas</h3>
-            <div className="kpi-stat-icon-wrapper">
-              <Receipt size={20} />
+        <TiltGlare maxTilt={5}>
+          <div className="kpi-stat-card ventas">
+            <div className="kpi-stat-header">
+              <h3>Ventas realizadas</h3>
+              <GlassIcon icon={Receipt} color="mint" size={44} />
             </div>
-          </div>
-          <div className="kpi-stat-body">
-            <div className="kpi-stat-value">
-              {kpis.currentCount}{' '}
-              <small style={{ fontSize: 14, fontWeight: 600, color: 'var(--muted)' }}>ventas</small>
-            </div>
-            {kpis.inProgressCount > 0 && (
-              <div style={{ fontSize: 11, fontWeight: 600, color: 'var(--muted)', marginTop: 2 }}>
-                ⏱ {kpis.inProgressCount} en proceso
+            <div className="kpi-stat-body">
+              <div className="kpi-stat-value">
+                {kpis.currentCount}{' '}
+                <small style={{ fontSize: 14, fontWeight: 700, color: 'var(--muted)' }}>ventas</small>
               </div>
-            )}
-            <div className="kpi-stat-trend">
-              <span className={`trend-badge ${kpis.countChange.dir}`}>
-                {kpis.countChange.dir === 'up' && <TrendingUp size={12} />}
-                {kpis.countChange.dir === 'down' && <TrendingDown size={12} />}
-                {kpis.countChange.dir === 'neutral' && <Minus size={12} />}
-                {kpis.countChange.text}
-              </span>
-              <span className="trend-reference">
-                vs. anterior ({kpis.precedingCount} ventas)
-              </span>
+              {kpis.inProgressCount > 0 && (
+                <div style={{ fontSize: 11, fontWeight: 700, color: '#a06b52', marginTop: 2 }}>
+                  ⏱ {kpis.inProgressCount} en proceso
+                </div>
+              )}
+              <div className="kpi-stat-trend">
+                <span className={`trend-badge ${kpis.countChange.dir}`}>
+                  {kpis.countChange.dir === 'up' && <TrendingUp size={12} />}
+                  {kpis.countChange.dir === 'down' && <TrendingDown size={12} />}
+                  {kpis.countChange.dir === 'neutral' && <Minus size={12} />}
+                  {kpis.countChange.text}
+                </span>
+                <span className="trend-reference">
+                  vs. anterior ({kpis.precedingCount} ventas)
+                </span>
+              </div>
             </div>
           </div>
-        </div>
+        </TiltGlare>
 
         {/* KPI 3: Ticket promedio */}
-        <div className="kpi-stat-card ticket">
-          <div className="kpi-stat-header">
-            <h3>Ticket promedio</h3>
-            <div className="kpi-stat-icon-wrapper">
-              <CreditCard size={20} />
+        <TiltGlare maxTilt={5}>
+          <div className="kpi-stat-card ticket">
+            <div className="kpi-stat-header">
+              <h3>Ticket promedio</h3>
+              <GlassIcon icon={CreditCard} color="coral" size={44} />
+            </div>
+            <div className="kpi-stat-body">
+              <div className="kpi-stat-value">{formatBs(kpis.currentAverage)}</div>
+              <div className="kpi-stat-trend">
+                <span className={`trend-badge ${kpis.averageChange.dir}`}>
+                  {kpis.averageChange.dir === 'up' && <TrendingUp size={12} />}
+                  {kpis.averageChange.dir === 'down' && <TrendingDown size={12} />}
+                  {kpis.averageChange.dir === 'neutral' && <Minus size={12} />}
+                  {kpis.averageChange.text}
+                </span>
+                <span className="trend-reference">
+                  vs. anterior ({formatBs(kpis.precedingAverage)})
+                </span>
+              </div>
             </div>
           </div>
-          <div className="kpi-stat-body">
-            <div className="kpi-stat-value">{formatBs(kpis.currentAverage)}</div>
-            <div className="kpi-stat-trend">
-              <span className={`trend-badge ${kpis.averageChange.dir}`}>
-                {kpis.averageChange.dir === 'up' && <TrendingUp size={12} />}
-                {kpis.averageChange.dir === 'down' && <TrendingDown size={12} />}
-                {kpis.averageChange.dir === 'neutral' && <Minus size={12} />}
-                {kpis.averageChange.text}
-              </span>
-              <span className="trend-reference">
-                vs. anterior ({formatBs(kpis.precedingAverage)})
-              </span>
-            </div>
-          </div>
-        </div>
+        </TiltGlare>
       </div>
 
       {/* =========================================================
@@ -741,13 +746,15 @@ export default function AdminResumen({
                   y: {
                     beginAtZero: true,
                     ticks: {
-                      callback: (v) => `Bs. ${v}`
+                      callback: (v) => `Bs. ${v}`,
+                      color: '#6b5657',
+                      font: { weight: '600', size: 11 }
                     },
-                    grid: { color: 'rgba(0,0,0,0.05)' }
+                    grid: { color: 'rgba(255, 202, 136, 0.25)' }
                   },
                   x: {
-                    grid: { display: false },
-                    ticks: { maxRotation: 45, minRotation: 0 }
+                    grid: { color: 'rgba(255, 202, 136, 0.15)' },
+                    ticks: { maxRotation: 45, minRotation: 0, color: '#6b5657', font: { weight: '600', size: 11 } }
                   }
                 }
               }}
@@ -1005,47 +1012,57 @@ export default function AdminResumen({
             const latest = latestReadingsBySensor[dev.sensor_type]
             const info = getSensorStatusInfo(dev, latest)
 
-            // Ícono por sensor
-            let IconComponent = Activity
-            let iconColor = 'var(--mint-dark)'
+            // Ícono y color GlassIcon por sensor
+            let SensorIcon = Activity
+            let iconColor = 'mint'
             if (dev.sensor_type === 'hx711' || dev.sensor_type === 'weight') {
-              IconComponent = Scale
-              iconColor = '#925d10'
+              SensorIcon = Scale
+              iconColor = 'peach'
             } else if (dev.sensor_type === 'proximidad') {
-              IconComponent = Activity
-              iconColor = 'var(--mint-dark)'
+              SensorIcon = Activity
+              iconColor = 'mint'
             } else if (dev.sensor_type === 'magnetico') {
-              IconComponent = DoorClosed
-              iconColor = 'var(--coral-dark)'
+              SensorIcon = DoorOpen
+              iconColor = 'coral'
             } else if (dev.sensor_type === 'rc522') {
-              IconComponent = Radio
-              iconColor = '#8c681f'
+              SensorIcon = Radio
+              iconColor = 'sunny'
             }
+
+            const hasValidData = Boolean(latest && info.readingDisplay && info.readingDisplay !== 'Sin datos' && dev.active !== false)
+            const splitFlapVariant = hasValidData ? 'mint' : 'sunny'
 
             return (
               <div key={dev.id || dev.sensor_type} className="sensor-card">
                 <div>
                   <div className="sensor-card-top">
                     <div className="sensor-card-name">
-                      <IconComponent size={16} color={iconColor} />
-                      <span>{dev.name || dev.sensor_type}</span>
+                      <GlassIcon icon={SensorIcon} color={iconColor} size={38} />
+                      <span style={{ fontWeight: 800, color: '#3b2829' }}>{dev.name || dev.sensor_type}</span>
                     </div>
                     <span className={info.badgeClass}>{info.statusLabel}</span>
                   </div>
 
-                  <div style={{ fontSize: 11, color: 'var(--muted)', marginTop: 4, display: 'flex', alignItems: 'center', gap: 4 }}>
+                  <div style={{ fontSize: 11, color: '#8c7374', marginTop: 8, display: 'flex', alignItems: 'center', gap: 6 }}>
                     <span>Configuración:</span>
-                    <strong style={{ color: dev.active !== false ? 'var(--ink)' : 'var(--coral-dark)' }}>
+                    <strong style={{ color: dev.active !== false ? '#3b2829' : 'var(--coral-dark)' }}>
                       {info.configuredLabel}
                     </strong>
                   </div>
                 </div>
 
                 <div>
-                  <span style={{ fontSize: 10, fontWeight: 700, textTransform: 'uppercase', color: 'var(--muted)' }}>
+                  <span style={{ fontSize: 10, fontWeight: 800, textTransform: 'uppercase', color: '#8c7374', letterSpacing: '0.4px', display: 'block', marginBottom: 4 }}>
                     Última Lectura / Estado
                   </span>
-                  <div className="sensor-card-value">{info.readingDisplay}</div>
+                  <div className="sensor-card-value">
+                    <SplitFlapText
+                      size="sm"
+                      variant={splitFlapVariant}
+                      text={info.readingDisplay || 'SIN DATOS'}
+                      compact
+                    />
+                  </div>
                 </div>
 
                 <div className="sensor-card-times">
