@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo, useRef } from 'react'
+import { useState, useEffect, useMemo } from 'react'
 import {
   Barcode,
   Radio,
@@ -22,6 +22,9 @@ import {
 } from 'lucide-react'
 import { supabase, recordCompletedPurchase } from '../supabaseClient'
 import { ROLE, normalizeRole } from '../utils/roles'
+import SplitFlapText from './SplitFlapText'
+import TiltedCard from './TiltedCard'
+import './SelfCheckout.css'
 
 // Generador de sonidos limpios con Web Audio API para simular el hardware
 function playBeep(freq = 880, type = 'sine', duration = 0.12) {
@@ -85,6 +88,27 @@ export default function SelfCheckout({ products, onStockUpdated, role, onShowTut
   const cartTotalAmount = useMemo(() => {
     return cart.reduce((acc, item) => acc + (item.price * item.quantity), 0)
   }, [cart])
+
+  const weightProgress =
+    expectedTotalWeightG > 0
+      ? Math.min(100, Math.max(0, (measuredWeightG / expectedTotalWeightG) * 100))
+      : 0
+
+  const weightZoneWidth =
+    expectedTotalWeightG > 0
+      ? Math.min(100, Math.max(7, (20 / expectedTotalWeightG) * 100))
+      : 7
+  const weightZoneStart = Math.max(0, 100 - weightZoneWidth)
+
+  const lastCartProductName =
+    cart.length > 0 ? cart[cart.length - 1].name?.toUpperCase() : null
+
+  const scannerStatusText = isWeightValid
+    ? 'PESO EXACTO'
+    : lastCartProductName || 'ESPERANDO TAG'
+
+  const paymentReached = step === 'PAYMENT' || step === 'EXIT'
+  const exitReached = step === 'EXIT'
 
   // -------------------------------------------------------------
   // ESCUCHA REALTIME DE TABLA SENSOR_READINGS (ESP32)
@@ -258,8 +282,9 @@ export default function SelfCheckout({ products, onStockUpdated, role, onShowTut
   }
 
   return (
-    <div className="checkout-container">
-      {/* Toast Notice */}
+    <div className="checkout-screen">
+      <div className="checkout-container">
+        {/* Toast Notice */}
       {toast && (
         <div className={`toast-notice ${toast.type}`}>
           {toast.type === 'success' ? <CheckCircle size={18} /> : <AlertTriangle size={18} />}
@@ -288,17 +313,17 @@ export default function SelfCheckout({ products, onStockUpdated, role, onShowTut
           <div className="step-num">1</div>
           <span>Escanear y Registrar</span>
         </div>
-        <div className="step-separator" />
+        <div className={`step-separator ${isWeightValid || paymentReached ? 'active' : ''}`} />
         <div className={`step-item ${isWeightValid ? 'completed' : step === 'CART' ? 'active' : ''}`}>
           <div className="step-num">2</div>
           <span>Validación Báscula Anti-Fraude</span>
         </div>
-        <div className="step-separator" />
+        <div className={`step-separator ${paymentReached ? 'active' : ''}`} />
         <div className={`step-item ${step === 'PAYMENT' ? 'active' : step === 'EXIT' ? 'completed' : ''}`}>
           <div className="step-num">3</div>
           <span>Pago (Tarjeta / QR)</span>
         </div>
-        <div className="step-separator" />
+        <div className={`step-separator ${exitReached ? 'active' : ''}`} />
         <div className={`step-item ${step === 'EXIT' ? 'active' : ''}`}>
           <div className="step-num">4</div>
           <span>Liberación de Salida</span>
@@ -309,17 +334,28 @@ export default function SelfCheckout({ products, onStockUpdated, role, onShowTut
       {step === 'CART' && (
         <div className="checkout-grid">
           {/* COLUMNA IZQUIERDA: ZONA DE ESCANEO Y VERIFICACIÓN DE BALANZA */}
-          <div className="kiosk-panel">
-            <h2 className="panel-title">
-              <Barcode size={22} color="var(--coral)" />
-              1. Escaneo de Productos (RFID RC522 / Código)
-            </h2>
+          <div className="kiosk-panel kiosk-panel-scanner">
+            <div className="scanner-section-head">
+              <h2 className="panel-title">
+                <Barcode size={22} color="var(--coral)" />
+                1. Escaneo de Productos (RFID RC522 / Código)
+              </h2>
+              <SplitFlapText
+                text={scannerStatusText}
+                className="scanner-status-flap"
+                ariaLabel={`Estado del escáner: ${scannerStatusText}`}
+              />
+            </div>
 
             {/* Escáner Visual y RFID Live */}
             <div className="scanner-box">
               <div className="rfid-live-beacon">
                 <span className="beacon-pill">
-                  <Radio size={14} color={rfidActivePing ? 'var(--coral)' : '#925d10'} />
+                  <span className={`rfid-radar ${rfidActivePing ? 'detected' : ''}`}>
+                    <span className="rfid-ring ring-one" />
+                    <span className="rfid-ring ring-two" />
+                    <Radio size={14} color={rfidActivePing ? 'var(--mint-dark)' : '#925d10'} />
+                  </span>
                   {rfidActivePing ? '¡Etiqueta RFID detectada!' : 'Antena RFID RC522 en espera...'}
                 </span>
                 {lastScannedTag && (
@@ -353,12 +389,12 @@ export default function SelfCheckout({ products, onStockUpdated, role, onShowTut
                 <span style={{ fontSize: 11, fontWeight: 700, color: 'var(--muted)', marginRight: 4 }}>
                   Demostración rápida:
                 </span>
-                {products.slice(0, 5).map((p) => (
+                {products.slice(0, 5).map((p, index) => (
                   <button
                     key={p.id}
                     type="button"
                     onClick={() => addProductByCode(p.rfid_uid || p.barcode)}
-                    className="chip-tag"
+                    className={`chip-tag chip-tone-${index % 3}`}
                     title={`Tag: ${p.rfid_uid} | Peso: ${p.expected_weight_g}g`}
                   >
                     <span>{p.image_url || '📦'}</span>
@@ -419,6 +455,32 @@ export default function SelfCheckout({ products, onStockUpdated, role, onShowTut
                 </div>
               </div>
 
+              <div className="weight-progress">
+                <div className="weight-progress-head">
+                  <span>Progreso de peso</span>
+                  <strong>{weightDifferenceG.toFixed(1)} g de diferencia</strong>
+                </div>
+                <div
+                  className="weight-progress-track"
+                  role="progressbar"
+                  aria-valuemin={0}
+                  aria-valuemax={100}
+                  aria-valuenow={Math.round(weightProgress)}
+                  aria-label="Progreso del peso en la báscula"
+                >
+                  <div className="weight-progress-fill" style={{ width: `${weightProgress}%` }} />
+                  <span
+                    className="weight-progress-zone"
+                    style={{ left: `${weightZoneStart}%`, width: `${weightZoneWidth}%` }}
+                  />
+                </div>
+                <div className="weight-progress-labels">
+                  <span>0 g</span>
+                  <span>Zona verde ±10 g</span>
+                  <span>{expectedTotalWeightG.toFixed(0)} g</span>
+                </div>
+              </div>
+
               <p style={{ fontSize: 12, color: 'var(--ink-secondary)', margin: '6px 0 10px' }}>
                 {isWeightValid
                   ? 'El peso físico en la celda de carga coincide con el cálculo del carrito. Botón de pago habilitado.'
@@ -459,7 +521,7 @@ export default function SelfCheckout({ products, onStockUpdated, role, onShowTut
           </div>
 
           {/* COLUMNA DERECHA: CARRITO DE COMPRAS Y TOTAL */}
-          <div className="kiosk-panel">
+          <div className="kiosk-panel kiosk-panel-cart">
             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 16 }}>
               <h2 className="panel-title" style={{ margin: 0, padding: 0, border: 'none' }}>
                 <ShoppingCart size={22} color="var(--coral)" />
@@ -489,10 +551,13 @@ export default function SelfCheckout({ products, onStockUpdated, role, onShowTut
             {/* Listado de Productos en Carrito */}
             <div className="cart-table-wrapper">
               {cart.length === 0 ? (
-                <div style={{ textAlign: 'center', padding: '48px 16px', color: 'var(--muted)' }}>
-                  <ShoppingCart size={44} style={{ opacity: 0.25, margin: '0 auto 12px' }} />
-                  <p style={{ fontWeight: 700, fontSize: 15 }}>Su carrito está vacío</p>
-                  <p style={{ fontSize: 13, marginTop: 4 }}>
+                <div className="empty-cart-state">
+                  <div className="empty-cart-illustration">
+                    <span className="empty-cart-ring" />
+                    <ShoppingCart size={48} />
+                  </div>
+                  <p className="empty-cart-title">Su carrito está vacío</p>
+                  <p className="empty-cart-copy">
                     Escanee un producto o use los botones de demostración rápida para comenzar.
                   </p>
                 </div>
@@ -533,7 +598,7 @@ export default function SelfCheckout({ products, onStockUpdated, role, onShowTut
                       <button
                         type="button"
                         onClick={() => removeItem(item.id)}
-                        style={{ background: 'transparent', border: 'none', cursor: 'pointer', color: '#94a3b8' }}
+                        style={{ background: 'transparent', border: 'none', cursor: 'pointer', color: 'var(--muted)' }}
                       >
                         <Trash2 size={14} />
                       </button>
@@ -555,7 +620,13 @@ export default function SelfCheckout({ products, onStockUpdated, role, onShowTut
               </div>
               <div className="total-line grand-total">
                 <span>Total a Pagar</span>
-                <span>Bs. {cartTotalAmount.toFixed(2)}</span>
+                <SplitFlapText
+                  text={`BS ${cartTotalAmount.toFixed(2)}`}
+                  compact
+                  variant="mint"
+                  className="total-flap"
+                  ariaLabel={`Total a pagar: Bs. ${cartTotalAmount.toFixed(2)}`}
+                />
               </div>
             </div>
 
@@ -564,17 +635,7 @@ export default function SelfCheckout({ products, onStockUpdated, role, onShowTut
               type="button"
               disabled={!isWeightValid}
               onClick={() => setStep('PAYMENT')}
-              className={isWeightValid ? 'btn-mint' : 'btn-primary'}
-              style={{
-                width: '100%',
-                padding: '16px',
-                fontSize: 16,
-                borderRadius: 'var(--radius-md)',
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                gap: 10
-              }}
+              className={`pay-button ${isWeightValid ? 'ready' : 'waiting'}`}
             >
               {isWeightValid ? (
                 <>
@@ -624,30 +685,26 @@ export default function SelfCheckout({ products, onStockUpdated, role, onShowTut
             </div>
 
             {paymentMethod === 'TARJETA' ? (
-              <div className="credit-card-mockup">
-                <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 20 }}>
-                  <span style={{ fontSize: 13, fontWeight: 700, letterSpacing: 1 }}>AUTOCOBRO SMART PAY</span>
-                  <CreditCard size={20} />
-                </div>
-                <div style={{ fontSize: 18, letterSpacing: 3, fontWeight: 700, marginBottom: 14 }}>
-                  •••• •••• •••• 4289
-                </div>
-                <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 11, opacity: 0.85 }}>
-                  <span>TITULAR: CLIENTE UCB</span>
-                  <span>VENCE: 12/28</span>
-                </div>
-              </div>
+              <TiltedCard
+                className="payment-tilted-card"
+                amount={cartTotalAmount}
+                method="Tarjeta Débito / Crédito"
+                customer="CLIENTE UCB"
+                authorizationCode={`AUTH-${Math.round(cartTotalAmount * 100)
+                  .toString()
+                  .padStart(6, '0')}`}
+              />
             ) : (
               <div className="qr-code-wrapper">
                 <div style={{
                   width: 140,
                   height: 140,
                   margin: '0 auto 12px',
-                  background: '#1e293b',
+                  background: 'linear-gradient(135deg, #fff6a9, #b4e4d6)',
                   borderRadius: 8,
                   display: 'grid',
                   placeItems: 'center',
-                  color: '#fff',
+                  color: '#3b2829',
                   fontSize: 11,
                   fontWeight: 700,
                   padding: 8,
@@ -675,8 +732,8 @@ export default function SelfCheckout({ products, onStockUpdated, role, onShowTut
               </button>
               <button
                 type="button"
-                className="btn-primary"
-                style={{ flex: 2, background: 'var(--mint)', color: '#0d5442' }}
+                className="btn-primary confirm-payment-btn"
+                style={{ flex: 2 }}
                 onClick={handleConfirmPayment}
                 disabled={isProcessingPay}
               >
@@ -740,6 +797,7 @@ export default function SelfCheckout({ products, onStockUpdated, role, onShowTut
           </button>
         </div>
       )}
+      </div>
     </div>
   )
 }

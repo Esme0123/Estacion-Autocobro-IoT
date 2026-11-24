@@ -955,15 +955,6 @@ h1, h2, h3, h4, h5, h6 {
   color: var(--coral-dark);
 }
 
-.credit-card-mockup {
-  background: linear-gradient(135deg, #1e293b, #334155);
-  color: #fff;
-  border-radius: var(--radius-md);
-  padding: 20px;
-  margin-bottom: 18px;
-  box-shadow: 0 10px 20px rgba(0,0,0,0.2);
-}
-
 .qr-code-wrapper {
   text-align: center;
   padding: 20px;
