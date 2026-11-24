@@ -4,6 +4,7 @@ import './SplitFlapText.css'
 export default function SplitFlapText({
   text = '',
   compact = false,
+  size = 'md',
   variant = 'default',
   className = '',
   ariaLabel
@@ -13,7 +14,7 @@ export default function SplitFlapText({
 
   return (
     <div
-      className={`split-flap split-flap-${variant}${compact ? ' compact' : ''}${className ? ` ${className}` : ''}`}
+      className={`split-flap split-flap-${variant} split-flap-${size}${compact ? ' compact' : ''}${className ? ` ${className}` : ''}`}
       role="img"
       aria-label={ariaLabel || value}
       aria-live="polite"
