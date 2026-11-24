@@ -4,6 +4,7 @@ import {
   Scale,
   Activity,
   DoorClosed,
+  DoorOpen,
   Radio,
   RefreshCw,
   Cpu,
@@ -16,6 +17,9 @@ import {
   Clock,
   ChevronRight
 } from 'lucide-react'
+import GlassIcon from '../GlassIcon'
+import SplitFlapText from '../SplitFlapText'
+import TiltGlare from '../TiltGlare'
 import { supabase } from '../../supabaseClient'
 import {
   DEFAULT_SENSOR_DEVICES,
@@ -281,40 +285,48 @@ export default function IoTResumen({ readings: initialReadings = [], onRefresh, 
       )}
 
       {/* =========================================================
-          RESUMEN COMPACTO (4 MÉTRICAS DE HARDWARE)
+          RESUMEN COMPACTO (4 MÉTRICAS DE HARDWARE CON TILT + GLARE)
          ========================================================= */}
       <div className="metric-cards-grid" style={{ gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))' }}>
-        <div className="pastel-metric-card peach">
-          <div className="metric-info">
-            <h3>Dispositivos Registrados</h3>
-            <p>{summaryCounts.totalDevices}</p>
+        <TiltGlare maxTilt={5}>
+          <div className="pastel-metric-card sunny">
+            <div className="metric-info">
+              <h3>Dispositivos Registrados</h3>
+              <p>{summaryCounts.totalDevices}</p>
+            </div>
+            <GlassIcon icon={Cpu} color="sunny" size={44} />
           </div>
-          <Cpu size={32} color="#925d10" />
-        </div>
+        </TiltGlare>
 
-        <div className="pastel-metric-card mint">
-          <div className="metric-info">
-            <h3>Dispositivos Habilitados</h3>
-            <p>{summaryCounts.enabledDevices}</p>
+        <TiltGlare maxTilt={5}>
+          <div className="pastel-metric-card mint">
+            <div className="metric-info">
+              <h3>Dispositivos Habilitados</h3>
+              <p>{summaryCounts.enabledDevices}</p>
+            </div>
+            <GlassIcon icon={CheckCircle} color="mint" size={44} />
           </div>
-          <CheckCircle size={32} color="var(--mint-dark)" />
-        </div>
+        </TiltGlare>
 
-        <div className="pastel-metric-card mint">
-          <div className="metric-info">
-            <h3>Recientemente Activos (&lt; 24h)</h3>
-            <p>{summaryCounts.recentlyActiveDevices}</p>
+        <TiltGlare maxTilt={5}>
+          <div className="pastel-metric-card peach">
+            <div className="metric-info">
+              <h3>Recientemente Activos (&lt; 24h)</h3>
+              <p>{summaryCounts.recentlyActiveDevices}</p>
+            </div>
+            <GlassIcon icon={Activity} color="peach" size={44} />
           </div>
-          <Activity size={32} color="var(--mint-dark)" />
-        </div>
+        </TiltGlare>
 
-        <div className="pastel-metric-card coral">
-          <div className="metric-info">
-            <h3>Sin Datos o Inactivos</h3>
-            <p>{summaryCounts.inactiveOrNoDataDevices}</p>
+        <TiltGlare maxTilt={5}>
+          <div className="pastel-metric-card coral">
+            <div className="metric-info">
+              <h3>Sin Datos o Inactivos</h3>
+              <p>{summaryCounts.inactiveOrNoDataDevices}</p>
+            </div>
+            <GlassIcon icon={AlertTriangle} color="coral" size={44} />
           </div>
-          <AlertTriangle size={32} color="var(--coral-dark)" />
-        </div>
+        </TiltGlare>
       </div>
 
       {/* =========================================================
@@ -325,72 +337,74 @@ export default function IoTResumen({ readings: initialReadings = [], onRefresh, 
           const latest = latestReadings[dev.sensor_type]
           const health = getSensorHealth(dev, latest)
 
-          let IconComponent = Activity
-          let iconColor = 'var(--mint-dark)'
-          let stateLabel = 'Sin datos'
-          let stateColor = 'var(--muted)'
+          let SensorIcon = Activity
+          let sensorColor = 'mint'
+          let stateLabel = 'SIN DATOS'
 
           if (dev.sensor_type === 'hx711' || dev.sensor_type === 'weight') {
-            IconComponent = Scale
-            iconColor = '#925d10'
-            stateLabel = latest ? `${parseFloat(latest.numeric_value ?? 0).toFixed(1)} ${latest.metadata?.unit || 'g'}` : 'Sin datos'
-            stateColor = '#925d10'
+            SensorIcon = Scale
+            sensorColor = 'peach'
+            stateLabel = latest ? `${parseFloat(latest.numeric_value ?? 0).toFixed(1)} ${latest.metadata?.unit || 'g'}` : 'SIN DATOS'
           } else if (dev.sensor_type === 'proximidad') {
-            IconComponent = Activity
-            iconColor = 'var(--mint-dark)'
+            SensorIcon = Activity
+            sensorColor = 'mint'
             const p = parseProximityState(latest)
-            stateLabel = latest ? p.label : 'Sin datos'
-            stateColor = p.isPresent ? '#0d5442' : 'var(--muted)'
+            stateLabel = latest ? p.label : 'SIN DATOS'
           } else if (dev.sensor_type === 'magnetico') {
-            IconComponent = DoorClosed
-            iconColor = 'var(--coral-dark)'
+            SensorIcon = DoorOpen
+            sensorColor = 'coral'
             const m = parseMagneticState(latest)
-            stateLabel = latest ? m.label : 'Sin datos'
-            stateColor = m.isOpen ? 'var(--coral-dark)' : '#0d5442'
+            stateLabel = latest ? m.label : 'SIN DATOS'
           } else if (dev.sensor_type === 'rc522') {
-            IconComponent = Radio
-            iconColor = '#8c681f'
+            SensorIcon = Radio
+            sensorColor = 'sunny'
             if (latest) {
               if (latest.metadata?.product_name && latest.metadata.product_name !== 'Desconocido') {
                 stateLabel = latest.metadata.product_name
               } else if (latest.rfid_uid) {
-                stateLabel = `Tag: ${latest.rfid_uid}`
+                stateLabel = `Tag ${latest.rfid_uid}`
               } else if (latest.metadata?.event) {
                 stateLabel = latest.metadata.event
               } else {
-                stateLabel = 'Lectura de tag registrada'
+                stateLabel = 'TAG DETECTADO'
               }
             } else {
-              stateLabel = 'Sin datos'
+              stateLabel = 'SIN DATOS'
             }
-            stateColor = '#8c681f'
           }
 
+          const hasData = Boolean(latest && stateLabel && stateLabel.toUpperCase() !== 'SIN DATOS')
+
           return (
-            <div key={dev.id || dev.sensor_type} className="sensor-card" style={{ background: '#fff' }}>
+            <div key={dev.id || dev.sensor_type} className="sensor-card">
               <div>
                 <div className="sensor-card-top">
                   <div className="sensor-card-name">
-                    <IconComponent size={18} color={iconColor} />
-                    <span>{dev.name || dev.sensor_type}</span>
+                    <GlassIcon icon={SensorIcon} color={sensorColor} size={38} />
+                    <span style={{ fontWeight: 800, color: '#3b2829' }}>{dev.name || dev.sensor_type}</span>
                   </div>
                   <span className={health.className}>{health.label}</span>
                 </div>
 
-                <div style={{ fontSize: 11, color: 'var(--muted)', marginTop: 4, display: 'flex', alignItems: 'center', gap: 6 }}>
+                <div style={{ fontSize: 11, color: '#8c7374', marginTop: 8, display: 'flex', alignItems: 'center', gap: 6 }}>
                   <span>Estado configurado:</span>
-                  <strong style={{ color: dev.active !== false ? 'var(--mint-dark)' : 'var(--coral-dark)' }}>
+                  <strong style={{ color: dev.active !== false ? '#136350' : 'var(--coral-dark)' }}>
                     {dev.active !== false ? 'Habilitado' : 'Deshabilitado'}
                   </strong>
                 </div>
               </div>
 
               <div>
-                <span style={{ fontSize: 10, fontWeight: 700, textTransform: 'uppercase', color: 'var(--muted)' }}>
+                <span style={{ fontSize: 10, fontWeight: 800, textTransform: 'uppercase', color: '#8c7374', letterSpacing: '0.4px', display: 'block', marginBottom: 4 }}>
                   Última Lectura / Estado
                 </span>
-                <div className="sensor-card-value" style={{ color: stateColor, fontWeight: 800 }}>
-                  {stateLabel}
+                <div className="sensor-card-value">
+                  <SplitFlapText
+                    size="sm"
+                    variant={hasData ? 'mint' : 'sunny'}
+                    text={stateLabel}
+                    compact
+                  />
                 </div>
               </div>
 
@@ -399,11 +413,11 @@ export default function IoTResumen({ readings: initialReadings = [], onRefresh, 
                 <span>Exacta: {latest ? formatExactDateTimeLaPaz(latest.created_at) : '—'}</span>
               </div>
 
-              <div style={{ paddingTop: 10, borderTop: '1px solid #f1f5f9' }}>
+              <div style={{ paddingTop: 10, borderTop: '1px solid rgba(255, 202, 136, 0.3)' }}>
                 <Link
                   to={`/admin/lecturas?sensor=${dev.sensor_type}`}
                   className="btn-ghost"
-                  style={{ width: '100%', justifyContent: 'center', fontSize: 11, padding: '6px 10px', fontWeight: 700 }}
+                  style={{ width: '100%', justifyContent: 'center', fontSize: 11, padding: '7px 12px', fontWeight: 700 }}
                 >
                   <span>Ver historial en Lecturas</span>
                   <ChevronRight size={13} />

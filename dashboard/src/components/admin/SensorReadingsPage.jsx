@@ -6,6 +6,7 @@ import {
   RefreshCw,
   Scale,
   DoorClosed,
+  DoorOpen,
   Radio,
   Calendar,
   Clock,
@@ -24,6 +25,8 @@ import {
   ChevronRight,
   Filter
 } from 'lucide-react'
+import GlassIcon from '../GlassIcon'
+import SplitFlapText from '../SplitFlapText'
 import {
   Chart as ChartJS,
   LineElement,
@@ -709,13 +712,11 @@ export default function SensorReadingsPage({ readings: initialReadings = [], onR
         <section className="sensor-device-section hx711" id="sensor-hx711">
           <div className="sensor-section-header">
             <div className="sensor-title-row">
-              <div className="sensor-icon-box hx711">
-                <Scale size={24} />
-              </div>
+              <GlassIcon icon={Scale} color="peach" size={42} />
               <div className="sensor-info-header">
                 <h2>
                   Balanza — HX711
-                  <small style={{ fontSize: 11, fontWeight: 600, color: 'var(--muted)' }}>(Celda de carga)</small>
+                  <small style={{ fontSize: 11, fontWeight: 700, color: '#a06b52' }}>(Celda de carga)</small>
                 </h2>
                 <p>Mide la masa total colocada sobre la bandeja de pesaje anti-fraude del kiosko.</p>
               </div>
@@ -735,8 +736,13 @@ export default function SensorReadingsPage({ readings: initialReadings = [], onR
           <div className="sensor-state-banner">
             <div className="state-item">
               <span className="state-label">Último Peso Medido</span>
-              <div className="state-value-primary" style={{ color: '#925d10' }}>
-                {hx711Latest ? `${parseFloat(hx711Latest.numeric_value ?? 0).toFixed(1)} ${hx711Latest.metadata?.unit || 'g'}` : 'Sin datos'}
+              <div className="state-value-primary" style={{ padding: '4px 0' }}>
+                <SplitFlapText
+                  size="sm"
+                  variant={hx711Latest ? 'mint' : 'sunny'}
+                  text={hx711Latest ? `${parseFloat(hx711Latest.numeric_value ?? 0).toFixed(1)} ${hx711Latest.metadata?.unit || 'G'}` : 'SIN DATOS'}
+                  compact
+                />
               </div>
             </div>
 
@@ -916,9 +922,7 @@ export default function SensorReadingsPage({ readings: initialReadings = [], onR
         <section className="sensor-device-section proximidad" id="sensor-proximidad">
           <div className="sensor-section-header">
             <div className="sensor-title-row">
-              <div className="sensor-icon-box proximidad">
-                <Activity size={24} />
-              </div>
+              <GlassIcon icon={Activity} color="mint" size={42} />
               <div className="sensor-info-header">
                 <h2>
                   Sensor de Proximidad — Infrarrojo / HC-SR04
@@ -941,8 +945,13 @@ export default function SensorReadingsPage({ readings: initialReadings = [], onR
           <div className="sensor-state-banner">
             <div className="state-item">
               <span className="state-label">Estado Actual Detectado</span>
-              <div className="state-value-primary" style={{ color: proxState.isPresent ? '#0d5442' : 'var(--muted)' }}>
-                {proxLatest ? proxState.label : 'Sin datos'}
+              <div className="state-value-primary" style={{ padding: '4px 0' }}>
+                <SplitFlapText
+                  size="sm"
+                  variant={proxLatest ? 'mint' : 'sunny'}
+                  text={proxLatest ? (proxState.label || 'DETECTADO') : 'SIN DATOS'}
+                  compact
+                />
               </div>
             </div>
 
@@ -1102,9 +1111,7 @@ export default function SensorReadingsPage({ readings: initialReadings = [], onR
         <section className="sensor-device-section magnetico" id="sensor-magnetico">
           <div className="sensor-section-header">
             <div className="sensor-title-row">
-              <div className="sensor-icon-box magnetico">
-                <DoorClosed size={24} />
-              </div>
+              <GlassIcon icon={DoorOpen} color="coral" size={42} />
               <div className="sensor-info-header">
                 <h2>
                   Sensor Magnético — Puerta de Salida
@@ -1127,8 +1134,13 @@ export default function SensorReadingsPage({ readings: initialReadings = [], onR
           <div className="sensor-state-banner">
             <div className="state-item">
               <span className="state-label">Estado de la Puerta</span>
-              <div className="state-value-primary" style={{ color: magState.isOpen ? 'var(--coral-dark)' : '#0d5442' }}>
-                {magLatest ? magState.label : 'Sin datos'}
+              <div className="state-value-primary" style={{ padding: '4px 0' }}>
+                <SplitFlapText
+                  size="sm"
+                  variant={magLatest ? 'mint' : 'sunny'}
+                  text={magLatest ? (magState.label || 'CERRADA') : 'SIN DATOS'}
+                  compact
+                />
               </div>
             </div>
 
@@ -1290,13 +1302,11 @@ export default function SensorReadingsPage({ readings: initialReadings = [], onR
         <section className="sensor-device-section rc522" id="sensor-rc522">
           <div className="sensor-section-header">
             <div className="sensor-title-row">
-              <div className="sensor-icon-box rc522">
-                <Radio size={24} />
-              </div>
+              <GlassIcon icon={Radio} color="sunny" size={42} />
               <div className="sensor-info-header">
                 <h2>
                   Lector RFID — RC522
-                  <small style={{ fontSize: 11, fontWeight: 600, color: 'var(--muted)' }}>(13.56 MHz SPI)</small>
+                  <small style={{ fontSize: 11, fontWeight: 700, color: '#925d10' }}>(13.56 MHz SPI)</small>
                 </h2>
                 <p>Detecta el acercamiento de etiquetas RFID adheridas a los artículos para su registro.</p>
               </div>
@@ -1316,8 +1326,17 @@ export default function SensorReadingsPage({ readings: initialReadings = [], onR
           <div className="sensor-state-banner">
             <div className="state-item">
               <span className="state-label">Último Evento Registrado</span>
-              <div className="state-value-primary" style={{ color: '#925d10', fontSize: 16 }}>
-                {rfidLatest ? 'Lectura de tag RFID registrada' : 'Sin datos'}
+              <div className="state-value-primary" style={{ padding: '4px 0' }}>
+                <SplitFlapText
+                  size="sm"
+                  variant={rfidLatest ? 'mint' : 'sunny'}
+                  text={
+                    rfidLatest
+                      ? (rfidLatest.metadata?.product_name || (rfidLatest.rfid_uid ? `TAG ${rfidLatest.rfid_uid}` : 'TAG REGISTRADO'))
+                      : 'SIN DATOS'
+                  }
+                  compact
+                />
               </div>
             </div>
 

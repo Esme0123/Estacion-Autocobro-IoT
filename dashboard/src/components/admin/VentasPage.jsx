@@ -17,6 +17,8 @@ import {
   CheckCircle,
   AlertCircle
 } from 'lucide-react'
+import GlassIcon from '../GlassIcon'
+import TiltGlare from '../TiltGlare'
 import { supabase, getPurchasesFromDB } from '../../supabaseClient'
 import {
   TIMEZONE,
@@ -553,69 +555,69 @@ export default function VentasPage({
       )}
 
       {/* =========================================================
-          2. SUMMARY CARDS (INGRESOS, VENTAS REALIZADAS, TICKET PROMEDIO)
+          2. SUMMARY CARDS CON TILT + GLARE + GLASSICON
          ========================================================= */}
       <div className="resumen-kpis-grid" style={{ marginBottom: 24 }}>
         {/* KPI 1: Ingresos */}
-        <div className="kpi-stat-card ingresos">
-          <div className="kpi-stat-header">
-            <h3>Ingresos</h3>
-            <div className="kpi-stat-icon-wrapper">
-              <DollarSign size={20} />
+        <TiltGlare maxTilt={5}>
+          <div className="kpi-stat-card ingresos">
+            <div className="kpi-stat-header">
+              <h3>Ingresos</h3>
+              <GlassIcon icon={DollarSign} color="sunny" size={44} />
+            </div>
+            <div className="kpi-stat-body">
+              <div className="kpi-stat-value">{formatBs(summaryKpis.revenue)}</div>
+              <div style={{ fontSize: 12, color: '#8c7374', marginTop: 4 }}>
+                Total de compras pagadas en el período
+              </div>
             </div>
           </div>
-          <div className="kpi-stat-body">
-            <div className="kpi-stat-value">{formatBs(summaryKpis.revenue)}</div>
-            <div style={{ fontSize: 12, color: 'var(--muted)', marginTop: 4 }}>
-              Total de compras pagadas en el período
-            </div>
-          </div>
-        </div>
+        </TiltGlare>
 
         {/* KPI 2: Ventas realizadas */}
-        <div className="kpi-stat-card ventas">
-          <div className="kpi-stat-header">
-            <h3>Ventas realizadas</h3>
-            <div className="kpi-stat-icon-wrapper">
-              <Receipt size={20} />
+        <TiltGlare maxTilt={5}>
+          <div className="kpi-stat-card ventas">
+            <div className="kpi-stat-header">
+              <h3>Ventas realizadas</h3>
+              <GlassIcon icon={Receipt} color="mint" size={44} />
             </div>
-          </div>
-          <div className="kpi-stat-body">
-            <div className="kpi-stat-value">
-              {summaryKpis.paidCount}{' '}
-              <small style={{ fontSize: 14, fontWeight: 600, color: 'var(--muted)' }}>
-                {summaryKpis.paidCount === 1 ? 'venta pagada' : 'ventas pagadas'}
-              </small>
-            </div>
-            <div style={{ fontSize: 12, color: 'var(--muted)', marginTop: 4 }}>
-              Excluye canceladas y compras pendientes
-            </div>
-            {(summaryKpis.pendingCount > 0 || summaryKpis.inProgressCount > 0) && (
-              <div style={{ fontSize: 11, fontWeight: 600, color: 'var(--muted)', marginTop: 2 }}>
-                ⏱ {[
-                  summaryKpis.pendingCount > 0 ? `${summaryKpis.pendingCount} pendiente${summaryKpis.pendingCount === 1 ? '' : 's'}` : null,
-                  summaryKpis.inProgressCount > 0 ? `${summaryKpis.inProgressCount} en proceso` : null
-                ].filter(Boolean).join(' • ')}
+            <div className="kpi-stat-body">
+              <div className="kpi-stat-value">
+                {summaryKpis.paidCount}{' '}
+                <small style={{ fontSize: 14, fontWeight: 700, color: 'var(--muted)' }}>
+                  {summaryKpis.paidCount === 1 ? 'venta pagada' : 'ventas pagadas'}
+                </small>
               </div>
-            )}
+              <div style={{ fontSize: 12, color: '#8c7374', marginTop: 4 }}>
+                Excluye canceladas y compras pendientes
+              </div>
+              {(summaryKpis.pendingCount > 0 || summaryKpis.inProgressCount > 0) && (
+                <div style={{ fontSize: 11, fontWeight: 700, color: '#a06b52', marginTop: 2 }}>
+                  ⏱ {[
+                    summaryKpis.pendingCount > 0 ? `${summaryKpis.pendingCount} pendiente${summaryKpis.pendingCount === 1 ? '' : 's'}` : null,
+                    summaryKpis.inProgressCount > 0 ? `${summaryKpis.inProgressCount} en proceso` : null
+                  ].filter(Boolean).join(' • ')}
+                </div>
+              )}
+            </div>
           </div>
-        </div>
+        </TiltGlare>
 
         {/* KPI 3: Ticket promedio */}
-        <div className="kpi-stat-card ticket">
-          <div className="kpi-stat-header">
-            <h3>Ticket promedio</h3>
-            <div className="kpi-stat-icon-wrapper">
-              <CreditCard size={20} />
+        <TiltGlare maxTilt={5}>
+          <div className="kpi-stat-card ticket">
+            <div className="kpi-stat-header">
+              <h3>Ticket promedio</h3>
+              <GlassIcon icon={CreditCard} color="coral" size={44} />
+            </div>
+            <div className="kpi-stat-body">
+              <div className="kpi-stat-value">{formatBs(summaryKpis.averageTicket)}</div>
+              <div style={{ fontSize: 12, color: '#8c7374', marginTop: 4 }}>
+                Ingresos entre compras pagadas
+              </div>
             </div>
           </div>
-          <div className="kpi-stat-body">
-            <div className="kpi-stat-value">{formatBs(summaryKpis.averageTicket)}</div>
-            <div style={{ fontSize: 12, color: 'var(--muted)', marginTop: 4 }}>
-              Ingresos entre compras pagadas
-            </div>
-          </div>
-        </div>
+        </TiltGlare>
       </div>
 
       {/* =========================================================
