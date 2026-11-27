@@ -160,6 +160,44 @@ h1, h2, h3, h4, h5, h6 {
   color: #8c681f;
 }
 
+/* Insignia informativa del rol actual (sin cambio rápido de modo) */
+.role-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  padding: 7px 14px;
+  border-radius: var(--radius-full);
+  border: 1.5px solid var(--border);
+  background: #f8fafc;
+  color: var(--ink-secondary);
+  font-size: 12px;
+  font-weight: 800;
+  white-space: nowrap;
+}
+
+.role-badge-emoji {
+  font-size: 14px;
+  line-height: 1;
+}
+
+.role-badge.role-cliente {
+  background: var(--mint-light);
+  border-color: var(--mint);
+  color: var(--mint-dark);
+}
+
+.role-badge.role-gerente {
+  background: var(--peach-light);
+  border-color: var(--peach);
+  color: #8c681f;
+}
+
+.role-badge.role-admin {
+  background: var(--coral-light);
+  border-color: var(--coral);
+  color: var(--coral-dark);
+}
+
 .sim-toggle-btn {
   display: inline-flex;
   align-items: center;
@@ -263,8 +301,8 @@ h1, h2, h3, h4, h5, h6 {
 
 .demo-buttons-grid {
   display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 10px;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 8px;
 }
 
 .demo-btn {
@@ -292,12 +330,37 @@ h1, h2, h3, h4, h5, h6 {
   border-color: var(--mint-dark);
 }
 
+.demo-btn.gerente {
+  border-color: var(--peach);
+}
+.demo-btn.gerente:hover {
+  background: var(--cream-light);
+  border-color: #e29b43;
+}
+
 .demo-btn.admin {
   border-color: var(--peach);
 }
 .demo-btn.admin:hover {
   background: var(--peach-light);
   border-color: var(--coral);
+}
+
+@media (max-width: 480px) {
+  .demo-buttons-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .main-navbar {
+    flex-wrap: wrap;
+    gap: 10px;
+    padding: 12px 16px;
+  }
+
+  .nav-actions {
+    flex-wrap: wrap;
+    justify-content: flex-end;
+  }
 }
 
 .tabs {
@@ -357,6 +420,53 @@ h1, h2, h3, h4, h5, h6 {
   outline: none;
   border-color: var(--peach);
   box-shadow: 0 0 0 3px rgba(255, 202, 136, 0.35);
+}
+
+.field input::placeholder {
+  color: var(--muted);
+  opacity: 0.9;
+}
+
+.password-input-wrapper {
+  position: relative;
+  display: flex;
+  align-items: center;
+  width: 100%;
+}
+
+.password-input-wrapper input {
+  padding-right: 44px;
+}
+
+.password-input-wrapper input::placeholder {
+  color: var(--muted);
+  opacity: 0.95;
+  letter-spacing: 1px;
+}
+
+.password-toggle-btn {
+  position: absolute;
+  right: 10px;
+  background: transparent;
+  border: none;
+  color: var(--muted);
+  cursor: pointer;
+  padding: 6px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: var(--radius-sm);
+  transition: var(--transition);
+}
+
+.password-toggle-btn:hover {
+  color: var(--ink);
+  background: rgba(0, 0, 0, 0.05);
+}
+
+.password-toggle-btn:focus-visible {
+  outline: 2px solid var(--peach);
+  color: var(--ink);
 }
 
 .btn-primary {
@@ -424,6 +534,41 @@ h1, h2, h3, h4, h5, h6 {
   max-width: 1300px;
   margin: 0 auto;
   padding: 24px;
+}
+
+/* Acceso manual discreto al tutorial de autocobro */
+.tutorial-reopen-row {
+  display: flex;
+  justify-content: flex-end;
+  margin-bottom: 10px;
+}
+
+.tutorial-reopen-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 12px;
+  border-radius: 999px;
+  border: 1px solid var(--border);
+  background: #fff;
+  color: var(--muted);
+  font-family: inherit;
+  font-size: 12px;
+  font-weight: 700;
+  cursor: pointer;
+  transition: var(--transition);
+}
+
+.tutorial-reopen-btn:hover {
+  border-color: var(--peach);
+  background: var(--cream-light);
+  color: #8c681f;
+}
+
+@media (max-width: 560px) {
+  .tutorial-reopen-row {
+    justify-content: center;
+  }
 }
 
 /* Pasos visuales del flujo */
@@ -855,15 +1000,6 @@ h1, h2, h3, h4, h5, h6 {
   border-color: var(--coral);
   background: var(--coral-light);
   color: var(--coral-dark);
-}
-
-.credit-card-mockup {
-  background: linear-gradient(135deg, #1e293b, #334155);
-  color: #fff;
-  border-radius: var(--radius-md);
-  padding: 20px;
-  margin-bottom: 18px;
-  box-shadow: 0 10px 20px rgba(0,0,0,0.2);
 }
 
 .qr-code-wrapper {

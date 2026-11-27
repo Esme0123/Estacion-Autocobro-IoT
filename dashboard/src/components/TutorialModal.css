@@ -1,0 +1,444 @@
+/* ==========================================================================
+   TUTORIAL DE AUTOCOBRO (MODAL DE 6 PASOS)
+   Estética pastel: coral #de7272, melocotón #ffca88, crema #fff6a9 y
+   verde menta #b4e4d6 sobre tarjeta crema #fdf8ee.
+   Estilos aislados con prefijo .tutorial- para no afectar el Panel Admin.
+   ========================================================================== */
+
+.tutorial-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 1200;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 20px;
+  background: rgba(15, 23, 42, 0.62);
+  backdrop-filter: blur(6px);
+  -webkit-backdrop-filter: blur(6px);
+  animation: tutorialOverlayIn 0.2s ease-out;
+}
+
+.tutorial-card {
+  width: min(880px, 100%);
+  min-width: 0;
+  max-height: calc(100vh - 40px);
+  max-height: calc(100dvh - 40px);
+  overflow-y: auto;
+  background: #fdf8ee;
+  border: 2px solid var(--peach, #ffca88);
+  border-radius: 20px;
+  padding: 18px 24px 22px;
+  box-shadow: 0 26px 70px rgba(15, 23, 42, 0.32);
+  position: relative;
+  outline: none;
+  font-family: 'Fredoka', 'Inter', sans-serif;
+  animation: tutorialCardIn 0.28s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+/* --------------------------- Barra superior --------------------------- */
+.tutorial-topbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 8px;
+}
+
+.tutorial-topbar-badge {
+  font-size: 10px;
+  font-weight: 800;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: #8c681f;
+  background: rgba(255, 246, 169, 0.65);
+  border: 1px solid rgba(255, 202, 136, 0.9);
+  border-radius: 999px;
+  padding: 4px 10px;
+}
+
+.tutorial-skip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 10px;
+  border: none;
+  border-radius: 999px;
+  background: transparent;
+  color: var(--muted, #64748b);
+  font-family: inherit;
+  font-size: 12px;
+  font-weight: 700;
+  cursor: pointer;
+  transition: background 0.2s ease, color 0.2s ease;
+}
+
+.tutorial-skip:hover {
+  background: #ffffff;
+  color: var(--coral-dark, #c45b5b);
+}
+
+/* ------------------------------ Cabecera ------------------------------ */
+.tutorial-header {
+  display: grid;
+  grid-template-columns: 48px 1fr 48px;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 16px;
+}
+
+.tutorial-nav-btn {
+  width: 48px;
+  height: 48px;
+  border: none;
+  border-radius: 14px;
+  display: grid;
+  place-items: center;
+  cursor: pointer;
+  transition: transform 0.15s ease, filter 0.2s ease, opacity 0.2s ease;
+}
+
+.tutorial-nav-prev {
+  background: #b4e4d6;
+  color: #0d5442;
+}
+
+.tutorial-nav-next {
+  background: #de7272;
+  color: #ffffff;
+}
+
+.tutorial-nav-btn:hover:not(:disabled) {
+  transform: translateY(-2px);
+  filter: brightness(0.97);
+}
+
+.tutorial-nav-btn:focus-visible {
+  outline: 3px solid rgba(255, 202, 136, 0.9);
+  outline-offset: 2px;
+}
+
+.tutorial-nav-btn:disabled {
+  opacity: 0.35;
+  cursor: not-allowed;
+}
+
+.tutorial-heading {
+  text-align: center;
+  min-width: 0;
+}
+
+.tutorial-heading h2 {
+  margin: 0;
+  font-family: 'Lilita One', 'Fredoka', sans-serif;
+  font-size: clamp(28px, 4vw, 34px);
+  font-weight: 400;
+  line-height: 1.05;
+  letter-spacing: 0.03em;
+  color: #de7272;
+  -webkit-text-stroke: 1.5px #2d2a26;
+  text-shadow: 2px 2px 0 #2d2a26;
+  paint-order: stroke fill;
+}
+
+.tutorial-title-coral {
+  color: #de7272;
+  -webkit-text-stroke: 1.5px #2d2a26;
+  text-shadow: 2px 2px 0 #2d2a26;
+}
+
+.tutorial-title-mint {
+  color: #b4e4d6;
+  -webkit-text-stroke: 1.5px #2d2a26;
+  text-shadow: 2px 2px 0 #2d2a26;
+}
+
+.tutorial-heading p {
+  margin: 6px 0 0;
+  font-family: 'Fredoka', sans-serif;
+  font-size: 13px;
+  font-weight: 700;
+  letter-spacing: 0.16em;
+  color: #1b7a63;
+}
+
+/* ------------------------------- Stepper ------------------------------ */
+.tutorial-stepper {
+  display: flex;
+  align-items: center;
+  margin: 0 0 18px;
+}
+
+.tutorial-step-line {
+  flex: 1;
+  height: 3px;
+  border-radius: 999px;
+  background: #e6e3dc;
+  margin: 0 5px;
+  transition: background 0.25s ease;
+}
+
+.tutorial-step-line.active {
+  background: #b4e4d6;
+}
+
+.tutorial-step-dot {
+  flex: 0 0 auto;
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  border: 2px solid #e6e3dc;
+  background: #f4f1ea;
+  color: #94a3b8;
+  display: grid;
+  place-items: center;
+  font-family: inherit;
+  font-size: 13px;
+  font-weight: 800;
+  cursor: pointer;
+  transition: background 0.25s ease, border-color 0.25s ease, color 0.25s ease;
+}
+
+.tutorial-step-dot.completed,
+.tutorial-step-dot.current {
+  background: #b4e4d6;
+  border-color: #b4e4d6;
+  color: #0d5442;
+}
+
+.tutorial-step-dot.current {
+  box-shadow: 0 0 0 4px rgba(180, 228, 214, 0.45);
+}
+
+.tutorial-step-dot:hover {
+  border-color: #b4e4d6;
+}
+
+/* ------------------------------- Imagen ------------------------------- */
+.tutorial-figure {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  place-items: center;
+  min-width: 0;
+  height: clamp(190px, 42vh, 380px);
+  padding: 12px;
+  background: #fff6a9;
+  border: 1px solid rgba(255, 202, 136, 0.9);
+  border-radius: 16px;
+  overflow: hidden;
+}
+
+.tutorial-image {
+  display: block;
+  width: 100%;
+  max-width: 100%;
+  min-width: 0;
+  height: 100%;
+  object-fit: contain;
+  border-radius: 10px;
+}
+
+.tutorial-image-fallback {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  text-align: center;
+  color: #8c681f;
+  font-size: 13px;
+}
+
+.tutorial-image-fallback-icon {
+  font-size: 34px;
+  line-height: 1;
+}
+
+.tutorial-image-fallback small {
+  font-size: 11px;
+  font-weight: 600;
+  opacity: 0.75;
+}
+
+/* ----------------------------- Pie / CTA ------------------------------ */
+.tutorial-caption {
+  margin: 14px 2px 0;
+  font-family: 'Fredoka', sans-serif;
+  font-size: 14px;
+  font-weight: 700;
+  line-height: 1.6;
+  color: var(--ink-secondary, #475569);
+}
+
+.tutorial-caption strong {
+  color: #2d2a26;
+  font-weight: 700;
+}
+
+.tutorial-hint {
+  margin: 14px 0 0;
+  text-align: center;
+  font-family: 'Fredoka', sans-serif;
+  font-size: 12px;
+  font-weight: 700;
+  color: #94a3b8;
+}
+
+.tutorial-finish-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  width: 100%;
+  margin-top: 16px;
+  padding: 15px 18px;
+  border: none;
+  border-radius: 14px;
+  background: #b4e4d6;
+  color: #0d5442;
+  font-family: inherit;
+  font-size: 15px;
+  font-weight: 800;
+  cursor: pointer;
+  transition: transform 0.15s ease, filter 0.2s ease, box-shadow 0.2s ease;
+}
+
+.tutorial-finish-btn:hover {
+  transform: translateY(-1px);
+  filter: brightness(0.98);
+  box-shadow: 0 8px 20px rgba(27, 122, 99, 0.22);
+}
+
+.tutorial-finish-btn:focus-visible {
+  outline: 3px solid rgba(255, 202, 136, 0.9);
+  outline-offset: 2px;
+}
+
+/* ---------------------------- Responsivo ------------------------------ */
+@media (max-width: 560px) {
+  .tutorial-overlay {
+    padding: 10px;
+  }
+
+  .tutorial-card {
+    max-height: calc(100dvh - 20px);
+    padding: 14px 14px 18px;
+    border-radius: 18px;
+  }
+
+  .tutorial-topbar-badge {
+    display: none;
+  }
+
+  .tutorial-topbar {
+    justify-content: flex-end;
+    margin-bottom: 2px;
+  }
+
+  .tutorial-header {
+    grid-template-columns: 40px 1fr 40px;
+    gap: 8px;
+    margin-bottom: 12px;
+  }
+
+  .tutorial-nav-btn {
+    width: 40px;
+    height: 40px;
+    border-radius: 12px;
+  }
+
+  .tutorial-heading h2 {
+    font-size: 28px;
+    letter-spacing: 0.02em;
+    -webkit-text-stroke: 1.2px #2d2a26;
+    text-shadow: 1.5px 1.5px 0 #2d2a26;
+  }
+
+  .tutorial-title-coral,
+  .tutorial-title-mint {
+    -webkit-text-stroke: 1.2px #2d2a26;
+    text-shadow: 1.5px 1.5px 0 #2d2a26;
+  }
+
+  .tutorial-heading p {
+    font-size: 11px;
+    letter-spacing: 0.12em;
+  }
+
+  .tutorial-stepper {
+    margin-bottom: 14px;
+  }
+
+  .tutorial-step-dot {
+    width: 27px;
+    height: 27px;
+    font-size: 12px;
+  }
+
+  .tutorial-step-line {
+    margin: 0 3px;
+  }
+
+  .tutorial-figure {
+    height: clamp(160px, 32vh, 260px);
+    padding: 8px;
+  }
+
+  .tutorial-caption {
+    font-size: 12px;
+    margin-top: 12px;
+  }
+
+  .tutorial-hint {
+    display: none;
+  }
+
+  .tutorial-finish-btn {
+    margin-top: 14px;
+    font-size: 14px;
+    padding: 14px;
+  }
+}
+
+@media (max-height: 640px) and (min-width: 561px) {
+  .tutorial-figure {
+    height: clamp(150px, 32vh, 260px);
+  }
+
+  .tutorial-caption {
+    font-size: 12px;
+    margin-top: 10px;
+  }
+}
+
+/* ---------------------------- Animaciones ----------------------------- */
+@keyframes tutorialOverlayIn {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+@keyframes tutorialCardIn {
+  from {
+    opacity: 0;
+    transform: scale(0.94) translateY(8px);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1) translateY(0);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .tutorial-overlay,
+  .tutorial-card {
+    animation: none;
+  }
+
+  .tutorial-nav-btn,
+  .tutorial-finish-btn {
+    transition: none;
+  }
+}
